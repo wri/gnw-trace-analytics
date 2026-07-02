@@ -1,9 +1,20 @@
 /**
  * Chakra UI v3 system mirroring the GNW (project-zeno-next) theme:
- * IBM Plex Sans/Mono, GNW primary blue, neutral grays and accent palette.
+ * IBM Plex Sans/Mono, GNW primary blue, neutral grays, the lime signature
+ * accent and the light "sky" gradient used on insight surfaces.
  */
 
-import { createSystem, defaultConfig, defineConfig } from "@chakra-ui/react";
+import {
+  createSystem,
+  defaultConfig,
+  defineConfig,
+  defineRecipe,
+} from "@chakra-ui/react";
+
+/** GNW headings are near-black ink, not the default gray. */
+const headingRecipe = defineRecipe({
+  base: { color: "neutral.900" },
+});
 
 const config = defineConfig({
   theme: {
@@ -54,11 +65,31 @@ const config = defineConfig({
           900: { value: "#323625" },
           950: { value: "#242e05" },
         },
+        lime: {
+          100: { value: "#F7FBD9" },
+          400: { value: "#E3F37F" },
+          500: { value: "#C3D16F" },
+          700: { value: "#8E9954" },
+        },
+        // GNW single-step accent overrides (rest of each ramp = Chakra default).
+        green: { 500: { value: "#00A651" } },
+        red: { 500: { value: "#FF452C" } },
+        orange: { 500: { value: "#FF9916" } },
         mint: {
           500: { value: "#00DCA7" },
           600: { value: "#00b086" },
         },
       },
+      gradients: {
+        // GNW "sky" gradient used behind insight widgets.
+        skyLight: {
+          value:
+            "linear-gradient(107deg, #CCE2FF 5.2%, #E0F1FA 14.44%, #F8FCE4 69.9%)",
+        },
+      },
+    },
+    recipes: {
+      heading: headingRecipe,
     },
     semanticTokens: {
       colors: {
@@ -67,6 +98,7 @@ const config = defineConfig({
           subtle: { value: "{colors.neutral.200}" },
           muted: { value: "{colors.neutral.300}" },
           panel: { value: "{colors.white}" },
+          info: { value: "{colors.primary.25}" },
         },
         fg: {
           DEFAULT: { value: "{colors.neutral.800}" },
@@ -77,6 +109,7 @@ const config = defineConfig({
         border: {
           DEFAULT: { value: "{colors.neutral.300}" },
           emphasized: { value: "{colors.neutral.400}" },
+          info: { value: "{colors.primary.100}" },
         },
         primary: {
           solid: { value: "{colors.primary.500}" },
@@ -84,6 +117,8 @@ const config = defineConfig({
           contrast: { value: "{colors.primary.50}" },
           muted: { value: "{colors.primary.100}" },
           subtle: { value: "{colors.primary.25}" },
+          emphasized: { value: "{colors.primary.300}" },
+          focusRing: { value: "{colors.primary.500}" },
         },
       },
     },

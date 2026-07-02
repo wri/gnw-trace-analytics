@@ -1,8 +1,13 @@
 "use client";
 
 import { Badge, Box, Flex, Text } from "@chakra-ui/react";
-import { ArrowDownRightIcon, ArrowUpRightIcon, MinusIcon } from "@phosphor-icons/react";
+import {
+  ArrowDownRightIcon,
+  ArrowUpRightIcon,
+  MinusIcon,
+} from "@phosphor-icons/react";
 import type { KpiDelta } from "@/lib/analytics/compare";
+import { Sparkline } from "@/components/ui/Sparkline";
 
 interface KpiCardProps {
   readonly label: string;
@@ -10,23 +15,55 @@ interface KpiCardProps {
   /** Delta vs the previous period; null hides the badge. */
   readonly delta: KpiDelta | null;
   readonly hint?: string;
+  /** Daily values for the trend sparkline (omit to hide). */
+  readonly spark?: readonly number[];
 }
 
-/** Headline KPI tile with a period-over-period delta badge. */
-export function KpiCard({ label, value, delta, hint }: KpiCardProps) {
+/** Headline KPI tile: mono eyebrow, tabular value, delta chip, sparkline. */
+export function KpiCard({ label, value, delta, hint, spark }: KpiCardProps) {
   return (
-    <Box bg="bg.panel" borderWidth="1px" borderColor="border" borderRadius="lg" p={4} minW={0}>
-      <Text fontSize="xs" color="fg.muted" mb={1} lineClamp={1}>
+    <Flex
+      direction="column"
+      bg="bg.panel"
+      borderWidth="1px"
+      borderColor="border"
+      borderRadius="sm"
+      px={4}
+      pt={3}
+      pb={spark?.length ? 0 : 3}
+      minW={0}
+      overflow="hidden"
+    >
+      <Text
+        fontSize="2xs"
+        fontFamily="mono"
+        textTransform="uppercase"
+        letterSpacing="0.05em"
+        color="fg.subtle"
+        mb={1}
+        lineClamp={1}
+        title={label}
+      >
         {label}
       </Text>
       <Flex align="baseline" gap={2} wrap="wrap">
-        <Text fontSize="2xl" fontWeight="bold" lineHeight="short">
+        <Text
+          fontSize="2xl"
+          fontWeight="semibold"
+          lineHeight="short"
+          color="neutral.900"
+          style={{ fontVariantNumeric: "tabular-nums" }}
+        >
           {value}
         </Text>
         {delta ? (
           <Badge
             colorPalette={
-              delta.direction === "flat" ? "gray" : delta.positive ? "green" : "red"
+              delta.direction === "flat"
+                ? "gray"
+                : delta.positive
+                  ? "green"
+                  : "red"
             }
             variant="subtle"
             fontSize="2xs"
@@ -47,6 +84,11 @@ export function KpiCard({ label, value, delta, hint }: KpiCardProps) {
           {hint}
         </Text>
       ) : null}
-    </Box>
+      {spark?.length ? (
+        <Box mt={2} mx={-4}>
+          <Sparkline values={spark} />
+        </Box>
+      ) : null}
+    </Flex>
   );
 }

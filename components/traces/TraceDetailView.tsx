@@ -1,8 +1,22 @@
 "use client";
 
 import { useMemo } from "react";
-import { Box, Button, Flex, Heading, Link as ChakraLink, Text } from "@chakra-ui/react";
-import { ArrowSquareOutIcon, DownloadSimpleIcon } from "@phosphor-icons/react";
+import {
+  Box,
+  Button,
+  Flex,
+  Heading,
+  Link as ChakraLink,
+  Text,
+} from "@chakra-ui/react";
+import {
+  ArrowSquareOutIcon,
+  BroomIcon,
+  ChatsCircleIcon,
+  CodeIcon,
+  DownloadSimpleIcon,
+  WrenchIcon,
+} from "@phosphor-icons/react";
 import type { TraceDetail } from "@/lib/types";
 import {
   currentUserPrompt,
@@ -34,8 +48,14 @@ export function TraceDetailView({
   const inputMessages = detail.input?.messages ?? [];
   const outputMessages = detail.output?.messages ?? [];
 
-  const prompt = useMemo(() => currentUserPrompt(inputMessages), [inputMessages]);
-  const window = useMemo(() => findActiveTurnWindow(outputMessages), [outputMessages]);
+  const prompt = useMemo(
+    () => currentUserPrompt(inputMessages),
+    [inputMessages],
+  );
+  const window = useMemo(
+    () => findActiveTurnWindow(outputMessages),
+    [outputMessages],
+  );
 
   const historyEnd = window.start ?? 0;
   const hasHistory = (window.start ?? 0) > 0;
@@ -43,11 +63,11 @@ export function TraceDetailView({
 
   const historyToolCalls = useMemo(
     () => extractToolCalls(outputMessages, 0, historyEnd),
-    [outputMessages, historyEnd]
+    [outputMessages, historyEnd],
   );
   const activeToolCalls = useMemo(
     () => extractToolCalls(outputMessages, activeStart, outputMessages.length),
-    [outputMessages, activeStart]
+    [outputMessages, activeStart],
   );
   const cleaned = useMemo(() => stripNoise(detail.raw), [detail.raw]);
 
@@ -55,7 +75,7 @@ export function TraceDetailView({
     downloadText(
       JSON.stringify(detail.raw, null, 2),
       `trace_${detail.id || "unknown"}.json`,
-      "application/json"
+      "application/json",
     );
   }
 
@@ -91,11 +111,17 @@ export function TraceDetailView({
             { label: "Environment", value: detail.environment ?? "" },
             {
               label: "Latency (s)",
-              value: detail.latencySeconds != null ? detail.latencySeconds.toFixed(2) : "",
+              value:
+                detail.latencySeconds != null
+                  ? detail.latencySeconds.toFixed(2)
+                  : "",
             },
             {
               label: "Total cost",
-              value: detail.totalCost != null ? `$${detail.totalCost.toFixed(4)}` : "",
+              value:
+                detail.totalCost != null
+                  ? `$${detail.totalCost.toFixed(4)}`
+                  : "",
             },
             {
               label: "Output messages",
@@ -129,7 +155,7 @@ export function TraceDetailView({
         )}
       </Box>
 
-      <Expander title="🛠 Tool calls">
+      <Expander title="Tool calls" icon={<WrenchIcon size={16} />}>
         <Flex direction="column" gap={3}>
           {hasHistory ? (
             <Expander title={`History (tool calls before the active turn)`}>
@@ -146,7 +172,7 @@ export function TraceDetailView({
         </Flex>
       </Expander>
 
-      <Expander title="💬 Output messages">
+      <Expander title="Output messages" icon={<ChatsCircleIcon size={16} />}>
         <Flex direction="column" gap={3}>
           {hasHistory ? (
             <Expander title="History (messages before the active turn)">
@@ -158,8 +184,14 @@ export function TraceDetailView({
               />
             </Expander>
           ) : null}
-          <Text fontSize="xs" color="fg.muted">
-            Active window start 👇
+          <Text
+            fontSize="2xs"
+            fontFamily="mono"
+            textTransform="uppercase"
+            letterSpacing="0.08em"
+            color="fg.subtle"
+          >
+            Active window start
           </Text>
           <MessagesView
             messages={outputMessages.slice(activeStart)}
@@ -170,12 +202,19 @@ export function TraceDetailView({
         </Flex>
       </Expander>
 
-      <Expander title="🧹 Cleaned trace JSON (noise removed)">
+      <Expander
+        title="Cleaned trace JSON (noise removed)"
+        icon={<BroomIcon size={16} />}
+      >
         <JsonBlock value={cleaned} maxHeight="500px" />
       </Expander>
 
       {showRaw ? (
-        <Expander title="🧾 Raw trace JSON" defaultOpen>
+        <Expander
+          title="Raw trace JSON"
+          icon={<CodeIcon size={16} />}
+          defaultOpen
+        >
           <JsonBlock value={detail.raw} maxHeight="500px" />
         </Expander>
       ) : null}

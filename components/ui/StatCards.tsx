@@ -16,20 +16,33 @@ interface StatCardsProps {
 /** Compact metric tiles (Streamlit st.metric equivalent). */
 export function StatCards({ items, columns }: StatCardsProps) {
   return (
-    <SimpleGrid columns={{ base: 2, md: columns ?? Math.min(items.length, 5) }} gap={3}>
+    <SimpleGrid columns={{ base: 2, md: columns ?? Math.min(items.length, 5) }} gap={2}>
       {items.map((item) => (
         <Box
           key={item.label}
           bg="bg.subtle"
-          borderRadius="md"
+          borderRadius="sm"
           px={3}
           py={2}
           minW={0}
         >
-          <Text fontSize="xs" color="fg.muted" lineClamp={1}>
+          <Text
+            fontSize="2xs"
+            fontFamily="mono"
+            textTransform="uppercase"
+            letterSpacing="0.05em"
+            color="fg.subtle"
+            lineClamp={1}
+            title={item.label}
+          >
             {item.label}
           </Text>
-          <Text fontSize="md" fontWeight="semibold" lineClamp={1}>
+          <Text
+            fontSize="md"
+            fontWeight="semibold"
+            lineClamp={1}
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
             {item.value}
           </Text>
           {item.hint ? (

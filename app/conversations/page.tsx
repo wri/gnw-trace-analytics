@@ -12,7 +12,6 @@ import {
   Box,
   Button,
   Flex,
-  Heading,
   Input,
   Link as ChakraLink,
   Spinner,
@@ -32,6 +31,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
 import { FiltersBar } from "@/components/FiltersBar";
 import { InlineAlert } from "@/components/ui/InlineAlert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useFiltersStore } from "@/stores/filtersStore";
 import { useSessionsStore, useUsersStore } from "@/stores/dataStores";
 import { fetchSessions } from "@/lib/api/zeno";
@@ -56,7 +56,8 @@ function ConversationsView() {
   const searchParams = useSearchParams();
   const userFilter = searchParams.get("user");
 
-  const { startDate, endDate, environment, excludeInternal } = useFiltersStore();
+  const { startDate, endDate, environment, excludeInternal } =
+    useFiltersStore();
   const store = useSessionsStore();
   const users = useUsersStore();
   const abortRef = useRef<AbortController | null>(null);
@@ -84,7 +85,7 @@ function ConversationsView() {
         {
           signal: controller.signal,
           onProgress: (fetched) => store.setProgress(fetched),
-        }
+        },
       );
       if (controller.signal.aborted) return;
       store.succeed(sessions, sig);
@@ -97,7 +98,10 @@ function ConversationsView() {
   useEffect(() => {
     if (!validRange) return;
     if (store.signature === signature && store.status !== "idle") return;
-    const timer = setTimeout(() => void runFetch(signature), AUTO_FETCH_DEBOUNCE_MS);
+    const timer = setTimeout(
+      () => void runFetch(signature),
+      AUTO_FETCH_DEBOUNCE_MS,
+    );
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, validRange]);
@@ -109,7 +113,7 @@ function ConversationsView() {
     fetchAllUsers()
       .then((all) => users.succeed(all, buildUserFirstSeenMap(all)))
       .catch((error) =>
-        users.fail(error instanceof Error ? error.message : String(error))
+        users.fail(error instanceof Error ? error.message : String(error)),
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -122,7 +126,8 @@ function ConversationsView() {
       if (!keepUserId(s.userId, { excludeInternal })) return false;
       if (environment !== "all" && s.environment !== environment) return false;
       if (userFilter && s.userId !== userFilter) return false;
-      if (searchLower && !s.firstPrompt.toLowerCase().includes(searchLower)) return false;
+      if (searchLower && !s.firstPrompt.toLowerCase().includes(searchLower))
+        return false;
       return true;
     });
 
@@ -131,14 +136,26 @@ function ConversationsView() {
       if (sortKey === "turns") {
         cmp = a.turnCount - b.turnCount;
       } else if (sortKey === "first") {
-        cmp = String(a.firstTimestamp ?? "").localeCompare(String(b.firstTimestamp ?? ""));
+        cmp = String(a.firstTimestamp ?? "").localeCompare(
+          String(b.firstTimestamp ?? ""),
+        );
       } else {
-        cmp = String(a.lastTimestamp ?? "").localeCompare(String(b.lastTimestamp ?? ""));
+        cmp = String(a.lastTimestamp ?? "").localeCompare(
+          String(b.lastTimestamp ?? ""),
+        );
       }
       return sortAsc ? cmp : -cmp;
     });
     return sorted;
-  }, [store.sessions, excludeInternal, environment, userFilter, search, sortKey, sortAsc]);
+  }, [
+    store.sessions,
+    excludeInternal,
+    environment,
+    userFilter,
+    search,
+    sortKey,
+    sortAsc,
+  ]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -170,9 +187,9 @@ function ConversationsView() {
           user_email: users.emailByUserId?.get(s.userId) ?? "",
           prompt_snippet: snippet(s.firstPrompt, 120),
           url: `${threadUrl}/${s.sessionId}`,
-        }))
+        })),
       ),
-      "gnw_session_urls.csv"
+      "gnw_session_urls.csv",
     );
   }
 
@@ -180,16 +197,21 @@ function ConversationsView() {
 
   return (
     <Flex direction="column" gap={5}>
-      <Box>
-        <Heading size="lg">🔗 Conversation Browser</Heading>
-        <Text color="fg.muted" fontSize="sm" mt={1}>
-          Every conversation thread in the window (deduped server-side by the Zeno
-          API) with its first prompt and turn count. Click through to the GNW Threads
-          UI or straight into the Trace Explorer.
-        </Text>
-      </Box>
+      <PageHeader
+        eyebrow="Zeno API · session threads"
+        title="Conversation Browser"
+        description="Every conversation thread in the window (deduped server-side by the
+          Zeno API) with its first prompt and turn count. Click through to the GNW
+          Threads UI or straight into the Trace Explorer."
+      />
 
-      <Box bg="bg.panel" borderWidth="1px" borderColor="border" borderRadius="lg" p={4}>
+      <Box
+        bg="bg.panel"
+        borderWidth="1px"
+        borderColor="border"
+        borderRadius="sm"
+        p={4}
+      >
         <FiltersBar />
         <Flex gap={3} mt={4} wrap="wrap" align="center">
           <Input
@@ -206,7 +228,9 @@ function ConversationsView() {
             <Tag.Root size="md" colorPalette="primary" variant="subtle">
               <Tag.Label>User: {filterEmail ?? userFilter}</Tag.Label>
               <Tag.EndElement>
-                <Tag.CloseTrigger onClick={() => router.replace("/conversations")}>
+                <Tag.CloseTrigger
+                  onClick={() => router.replace("/conversations")}
+                >
                   <XIcon />
                 </Tag.CloseTrigger>
               </Tag.EndElement>
@@ -226,8 +250,14 @@ function ConversationsView() {
             </Flex>
           ) : store.fetchedAt ? (
             <Flex align="center" gap={1} fontSize="xs" color="fg.muted">
-              <Text>Data as of {new Date(store.fetchedAt).toLocaleTimeString()}</Text>
-              <Button size="xs" variant="ghost" onClick={() => void runFetch(signature)}>
+              <Text>
+                Data as of {new Date(store.fetchedAt).toLocaleTimeString()}
+              </Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => void runFetch(signature)}
+              >
                 <ArrowsClockwiseIcon />
                 Refresh
               </Button>
@@ -237,11 +267,18 @@ function ConversationsView() {
       </Box>
 
       {store.status === "error" && store.error ? (
-        <InlineAlert status="error" title="Session fetch failed" message={store.error} />
+        <InlineAlert
+          status="error"
+          title="Session fetch failed"
+          message={store.error}
+        />
       ) : null}
 
       {store.status === "loaded" && rows.length === 0 ? (
-        <InlineAlert status="warning" message="No sessions found for the selected window/filters." />
+        <InlineAlert
+          status="warning"
+          message="No sessions found for the selected window/filters."
+        />
       ) : rows.length > 0 ? (
         <Box>
           <Flex justify="space-between" align="center" mb={2}>
@@ -276,18 +313,28 @@ function ConversationsView() {
             bg="bg.panel"
             borderWidth="1px"
             borderColor="border"
-            borderRadius="lg"
+            borderRadius="sm"
             overflowX="auto"
           >
             <Table.Root size="sm" striped>
               <Table.Header>
                 <Table.Row>
-                  <Table.ColumnHeader cursor="pointer" onClick={() => toggleSort("first")}>
+                  <Table.ColumnHeader
+                    cursor="pointer"
+                    onClick={() => toggleSort("first")}
+                    color="fg.subtle"
+                    fontWeight="normal"
+                  >
                     <Flex align="center" gap={1}>
                       Started {sortIndicator("first")}
                     </Flex>
                   </Table.ColumnHeader>
-                  <Table.ColumnHeader cursor="pointer" onClick={() => toggleSort("last")}>
+                  <Table.ColumnHeader
+                    cursor="pointer"
+                    onClick={() => toggleSort("last")}
+                    color="fg.subtle"
+                    fontWeight="normal"
+                  >
                     <Flex align="center" gap={1}>
                       Last activity {sortIndicator("last")}
                     </Flex>
@@ -296,14 +343,22 @@ function ConversationsView() {
                     cursor="pointer"
                     textAlign="right"
                     onClick={() => toggleSort("turns")}
+                    color="fg.subtle"
+                    fontWeight="normal"
                   >
                     <Flex align="center" gap={1} justify="flex-end">
                       Turns {sortIndicator("turns")}
                     </Flex>
                   </Table.ColumnHeader>
-                  <Table.ColumnHeader>User</Table.ColumnHeader>
-                  <Table.ColumnHeader>First prompt</Table.ColumnHeader>
-                  <Table.ColumnHeader>Open</Table.ColumnHeader>
+                  <Table.ColumnHeader color="fg.subtle" fontWeight="normal">
+                    User
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader color="fg.subtle" fontWeight="normal">
+                    First prompt
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader color="fg.subtle" fontWeight="normal">
+                    Open
+                  </Table.ColumnHeader>
                 </Table.Row>
               </Table.Header>
               <Table.Body>
@@ -311,10 +366,18 @@ function ConversationsView() {
                   const email = users.emailByUserId?.get(row.userId);
                   return (
                     <Table.Row key={row.sessionId}>
-                      <Table.Cell fontFamily="mono" fontSize="xs" whiteSpace="nowrap">
+                      <Table.Cell
+                        fontFamily="mono"
+                        fontSize="xs"
+                        whiteSpace="nowrap"
+                      >
                         {formatTimestamp(row.firstTimestamp)}
                       </Table.Cell>
-                      <Table.Cell fontFamily="mono" fontSize="xs" whiteSpace="nowrap">
+                      <Table.Cell
+                        fontFamily="mono"
+                        fontSize="xs"
+                        whiteSpace="nowrap"
+                      >
                         {formatTimestamp(row.lastTimestamp)}
                       </Table.Cell>
                       <Table.Cell textAlign="right">{row.turnCount}</Table.Cell>
@@ -348,7 +411,9 @@ function ConversationsView() {
                           >
                             GNW <ArrowSquareOutIcon />
                           </ChakraLink>
-                          <Link href={`/traces?session=${encodeURIComponent(row.sessionId)}`}>
+                          <Link
+                            href={`/traces?session=${encodeURIComponent(row.sessionId)}`}
+                          >
                             <Text color="fg.link">Traces</Text>
                           </Link>
                         </Flex>

@@ -2,12 +2,29 @@
 
 /** Shared date-range / environment filter controls (tracey sidebar port). */
 
+import { ReactNode } from "react";
 import { Box, Checkbox, Flex, Input, NativeSelect, Text } from "@chakra-ui/react";
 import { ENVIRONMENT_OPTIONS, type EnvironmentOption } from "@/lib/config";
 import { DATE_PRESETS, useFiltersStore, type DatePreset } from "@/stores/filtersStore";
 
 interface FiltersBarProps {
   readonly showExcludeInternal?: boolean;
+}
+
+/** GNW metadata-label style: small uppercase mono. */
+function FieldLabel({ children }: { readonly children: ReactNode }) {
+  return (
+    <Text
+      fontSize="2xs"
+      fontFamily="mono"
+      textTransform="uppercase"
+      letterSpacing="0.05em"
+      color="fg.subtle"
+      mb={1}
+    >
+      {children}
+    </Text>
+  );
 }
 
 export function FiltersBar({ showExcludeInternal = true }: FiltersBarProps) {
@@ -26,9 +43,7 @@ export function FiltersBar({ showExcludeInternal = true }: FiltersBarProps) {
   return (
     <Flex gap={4} wrap="wrap" align="flex-end">
       <Box>
-        <Text fontSize="xs" color="fg.muted" mb={1}>
-          Date preset
-        </Text>
+        <FieldLabel>Date preset</FieldLabel>
         <NativeSelect.Root size="sm" width="150px">
           <NativeSelect.Field
             value={preset}
@@ -45,9 +60,7 @@ export function FiltersBar({ showExcludeInternal = true }: FiltersBarProps) {
       </Box>
 
       <Box>
-        <Text fontSize="xs" color="fg.muted" mb={1}>
-          Start date
-        </Text>
+        <FieldLabel>Start date</FieldLabel>
         <Input
           size="sm"
           type="date"
@@ -59,9 +72,7 @@ export function FiltersBar({ showExcludeInternal = true }: FiltersBarProps) {
       </Box>
 
       <Box>
-        <Text fontSize="xs" color="fg.muted" mb={1}>
-          End date
-        </Text>
+        <FieldLabel>End date</FieldLabel>
         <Input
           size="sm"
           type="date"
@@ -73,9 +84,7 @@ export function FiltersBar({ showExcludeInternal = true }: FiltersBarProps) {
       </Box>
 
       <Box>
-        <Text fontSize="xs" color="fg.muted" mb={1}>
-          Environment
-        </Text>
+        <FieldLabel>Environment</FieldLabel>
         <NativeSelect.Root size="sm" width="140px">
           <NativeSelect.Field
             value={environment}

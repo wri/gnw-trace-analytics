@@ -10,8 +10,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { OUTCOME_COLORS, OUTCOME_LABELS } from "@/components/charts/palette";
-import { categoryColor } from "@/components/charts/palette";
+import {
+  categoryColor,
+  CHART_CHROME,
+  OUTCOME_COLORS,
+  OUTCOME_LABELS,
+  outcomeOrderIndex,
+} from "@/components/charts/palette";
+import { ChartTooltip } from "@/components/charts/ChartTooltip";
+import { ChartLegend } from "@/components/charts/ChartLegend";
 
 interface ScatterPoint {
   readonly toolCallCount: number;
@@ -36,47 +43,77 @@ export function ToolCallsScatterChart({
     bucket.push(point);
     byOutcome.set(label, bucket);
   }
+  // Fixed severity order so series/legend don't reshuffle with the data.
+  const series = [...byOutcome.entries()].sort(
+    ([a], [b]) => outcomeOrderIndex(a) - outcomeOrderIndex(b),
+  );
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E1E2E6" />
+      <ScatterChart margin={{ top: 4, right: 8, bottom: 8, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART_CHROME.grid} />
         <XAxis
           type="number"
           dataKey="toolCallCount"
           name="Tool calls"
-          tick={{ fontSize: 11 }}
+          allowDecimals={false}
+          axisLine={false}
+          tickLine={false}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
           label={{
             value: "Tool calls per trace",
             position: "insideBottom",
             offset: -4,
             fontSize: 11,
+            fill: CHART_CHROME.axisTick,
           }}
         />
         <YAxis
           type="number"
           dataKey="latencySeconds"
           name="Latency (s)"
-          tick={{ fontSize: 11 }}
-          width={48}
+          axisLine={false}
+          tickLine={false}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
+          width={56}
+          label={{
+            value: "Latency (s)",
+            angle: -90,
+            position: "insideLeft",
+            fontSize: 11,
+            fill: CHART_CHROME.axisTick,
+          }}
         />
         <Tooltip
-          cursor={{ strokeDasharray: "3 3" }}
-          formatter={(value: unknown, name: unknown) => [
-            String(name) === "Latency (s)"
-              ? `${Number(value).toFixed(2)}s`
-              : String(value),
-            String(name),
-          ]}
+          cursor={{ strokeDasharray: "3 3", stroke: CHART_CHROME.axisTick }}
+          content={
+            <ChartTooltip
+              formatValue={(v, name) =>
+                name === "Latency (s)" ? `${v.toFixed(2)}s` : String(v)
+              }
+            />
+          }
         />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        {[...byOutcome.entries()].map(([label, points], i) => (
+        <Legend
+          verticalAlign="top"
+          itemSorter={null}
+          content={<ChartLegend />}
+        />
+        {series.map(([label, points], i) => (
           <Scatter
             key={label}
             name={label}
             data={points.map((p) => ({ ...p }))}
             fill={OUTCOME_COLORS[label] ?? categoryColor(i)}
-            fillOpacity={0.6}
+            fillOpacity={0.7}
+            stroke={CHART_CHROME.surface}
+            strokeWidth={1}
             isAnimationActive={false}
           />
         ))}

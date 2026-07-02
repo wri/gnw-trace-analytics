@@ -10,7 +10,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCount } from "@/lib/format";
+import { CHART_CHROME } from "@/components/charts/palette";
+import { formatDateTick } from "@/components/charts/axis";
+import { ChartTooltip } from "@/components/charts/ChartTooltip";
+import { ChartLegend } from "@/components/charts/ChartLegend";
+import { formatCount, formatReportDate } from "@/lib/format";
 
 export interface BarSeries {
   readonly key: string;
@@ -25,7 +29,7 @@ interface StackedBarsChartProps {
   readonly yLabel?: string;
 }
 
-/** Stacked daily bars (user-segment chart equivalent). */
+/** Stacked daily bars with white seams between segments. */
 export function StackedBarsChart({
   data,
   series,
@@ -36,17 +40,34 @@ export function StackedBarsChart({
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
         data={[...data]}
-        margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+        margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
+        barCategoryGap={2}
       >
         <CartesianGrid
           strokeDasharray="3 3"
-          stroke="#E1E2E6"
+          stroke={CHART_CHROME.grid}
           vertical={false}
         />
-        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+        <XAxis
+          dataKey="date"
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={formatDateTick}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
+          minTickGap={24}
+        />
         <YAxis
-          tick={{ fontSize: 11 }}
-          width={44}
+          axisLine={false}
+          tickLine={false}
+          allowDecimals={false}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
+          width={yLabel ? 56 : 44}
           label={
             yLabel
               ? {
@@ -54,17 +75,26 @@ export function StackedBarsChart({
                   angle: -90,
                   position: "insideLeft",
                   fontSize: 11,
+                  fill: CHART_CHROME.axisTick,
                 }
               : undefined
           }
         />
         <Tooltip
-          formatter={(value: unknown, name: unknown) => [
-            formatCount(Number(value)),
-            String(name),
-          ]}
+          cursor={{ fill: "rgba(19, 23, 26, 0.05)" }}
+          content={
+            <ChartTooltip
+              reverse
+              formatValue={(v) => formatCount(v)}
+              formatLabel={(label) => formatReportDate(String(label ?? ""))}
+            />
+          }
         />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Legend
+          verticalAlign="top"
+          itemSorter={null}
+          content={<ChartLegend reverse />}
+        />
         {series.map((s) => (
           <Bar
             key={s.key}
@@ -72,6 +102,8 @@ export function StackedBarsChart({
             name={s.label}
             stackId="stack"
             fill={s.color}
+            stroke={CHART_CHROME.surface}
+            strokeWidth={1}
             isAnimationActive={false}
           />
         ))}

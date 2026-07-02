@@ -13,17 +13,17 @@ import {
   Button,
   Checkbox,
   Flex,
-  Heading,
   Input,
   NativeSelect,
   Spinner,
   Text,
 } from "@chakra-ui/react";
-import { RocketLaunchIcon } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
 import { FiltersBar } from "@/components/FiltersBar";
 import { InlineAlert } from "@/components/ui/InlineAlert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { TraceDetailView } from "@/components/traces/TraceDetailView";
 import { useFiltersStore } from "@/stores/filtersStore";
 import { useExplorerStore } from "@/stores/dataStores";
@@ -44,17 +44,20 @@ function ExplorerView() {
   const store = useExplorerStore();
 
   const [sessionIdFilter, setSessionIdFilter] = useState(
-    () => searchParams.get("session") ?? ""
+    () => searchParams.get("session") ?? "",
   );
   const [traceIdFilter, setTraceIdFilter] = useState(
-    () => searchParams.get("trace") ?? ""
+    () => searchParams.get("trace") ?? "",
   );
   const [promptFilter, setPromptFilter] = useState("");
   const [hideEmpty, setHideEmpty] = useState(true);
   const [showRaw, setShowRaw] = useState(false);
   const autoFetchedRef = useRef(false);
 
-  async function handleFetch(overrides?: { sessionId?: string; traceId?: string }) {
+  async function handleFetch(overrides?: {
+    sessionId?: string;
+    traceId?: string;
+  }) {
     store.start();
     try {
       const traceId = (overrides?.traceId ?? traceIdFilter).trim();
@@ -83,7 +86,7 @@ function ExplorerView() {
           {
             maxItems: EXPLORER_MAX_TRACES,
             onProgress: (fetched) => store.setProgress(fetched),
-          }
+          },
         );
         store.succeed(entries);
       }
@@ -117,7 +120,9 @@ function ExplorerView() {
         if (!cancelled) store.cacheDetail(fetched);
       } catch (error) {
         if (!cancelled) {
-          store.failDetail(error instanceof Error ? error.message : String(error));
+          store.failDetail(
+            error instanceof Error ? error.message : String(error),
+          );
         }
       }
     }
@@ -131,21 +136,25 @@ function ExplorerView() {
 
   return (
     <Flex direction="column" gap={5}>
-      <Box>
-        <Heading size="lg">🔎 Trace Explorer</Heading>
-        <Text color="fg.muted" fontSize="sm" mt={1}>
-          Inspect individual traces: the current user turn, assistant output, tool
-          calls, metadata and raw JSON. Traces are listed on demand from the Zeno API
-          (full conversation comes live from Langfuse) ·{" "}
-          {formatReportDate(startDate)} → {formatReportDate(endDate)}
-        </Text>
-      </Box>
+      <PageHeader
+        eyebrow={`Zeno API · ${formatReportDate(startDate)} → ${formatReportDate(endDate)}`}
+        title="Trace Explorer"
+        description="Inspect individual traces: the current user turn, assistant output,
+          tool calls, metadata and raw JSON. Traces are listed on demand from the Zeno
+          API; the full conversation comes live from Langfuse."
+      />
 
-      <Box bg="bg.panel" borderWidth="1px" borderColor="border" borderRadius="lg" p={4}>
+      <Box
+        bg="bg.panel"
+        borderWidth="1px"
+        borderColor="border"
+        borderRadius="sm"
+        p={4}
+      >
         <FiltersBar showExcludeInternal={false} />
         <Flex gap={4} mt={4} wrap="wrap" align="flex-end">
           <Box>
-            <Text fontSize="xs" color="fg.muted" mb={1}>
+            <Text fontSize="2xs" fontFamily="mono" textTransform="uppercase" letterSpacing="0.05em" color="fg.subtle" mb={1}>
               Session id
             </Text>
             <Input
@@ -157,7 +166,7 @@ function ExplorerView() {
             />
           </Box>
           <Box>
-            <Text fontSize="xs" color="fg.muted" mb={1}>
+            <Text fontSize="2xs" fontFamily="mono" textTransform="uppercase" letterSpacing="0.05em" color="fg.subtle" mb={1}>
               Trace id
             </Text>
             <Input
@@ -169,7 +178,7 @@ function ExplorerView() {
             />
           </Box>
           <Box>
-            <Text fontSize="xs" color="fg.muted" mb={1}>
+            <Text fontSize="2xs" fontFamily="mono" textTransform="uppercase" letterSpacing="0.05em" color="fg.subtle" mb={1}>
               Prompt contains
             </Text>
             <Input
@@ -187,14 +196,18 @@ function ExplorerView() {
             loading={store.status === "loading"}
             loadingText={`Fetching… ${formatCount(store.progress)}`}
           >
-            <RocketLaunchIcon />
+            <MagnifyingGlassIcon />
             Fetch matching traces
           </Button>
         </Flex>
       </Box>
 
       {store.status === "error" && store.error ? (
-        <InlineAlert status="error" title="Trace fetch failed" message={store.error} />
+        <InlineAlert
+          status="error"
+          title="Trace fetch failed"
+          message={store.error}
+        />
       ) : null}
 
       {store.status !== "loaded" ? (
@@ -203,14 +216,17 @@ function ExplorerView() {
           message="Set the date range / filters above, then click “Fetch matching traces”. Provide an exact Trace id to open a single trace directly."
         />
       ) : !store.entries.length ? (
-        <InlineAlert status="warning" message="No traces matched the selected window/filters." />
+        <InlineAlert
+          status="warning"
+          message="No traces matched the selected window/filters."
+        />
       ) : (
         <>
           <Flex gap={4} wrap="wrap" align="flex-end">
             <Box flex="1" minW="320px">
-              <Text fontSize="xs" color="fg.muted" mb={1}>
+              <Text fontSize="2xs" fontFamily="mono" textTransform="uppercase" letterSpacing="0.05em" color="fg.subtle" mb={1}>
                 Select trace ({formatCount(store.entries.length)} matching)
-              </Text>
+            </Text>
               <NativeSelect.Root size="sm">
                 <NativeSelect.Field
                   value={selectedId ?? ""}

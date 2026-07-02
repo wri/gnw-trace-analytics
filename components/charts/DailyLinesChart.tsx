@@ -11,11 +11,18 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { CHART_CHROME } from "@/components/charts/palette";
+import { formatDateTick } from "@/components/charts/axis";
+import { ChartTooltip } from "@/components/charts/ChartTooltip";
+import { ChartLegend } from "@/components/charts/ChartLegend";
+import { formatReportDate } from "@/lib/format";
 
 export interface LineSeries {
   readonly key: string;
   readonly label: string;
   readonly color: string;
+  /** Render dashed — for derived context series like moving averages. */
+  readonly dashed?: boolean;
 }
 
 interface DailyLinesChartProps {
@@ -24,30 +31,60 @@ interface DailyLinesChartProps {
   readonly yLabel?: string;
   readonly height?: number;
   readonly valueFormatter?: (value: number) => string;
+  /** Compact y-tick formatting for large values (e.g. 120000 → "120K"). */
+  readonly yTickFormatter?: (value: number) => string;
   /** Optional horizontal reference line (e.g. the daily prompt limit). */
   readonly referenceY?: number;
+  readonly referenceLabel?: string;
 }
 
-/** Multi-series daily line chart (Altair mark_line equivalent). */
+/** Multi-series daily line chart with hover crosshair. */
 export function DailyLinesChart({
   data,
   series,
   yLabel,
   height = 260,
   valueFormatter,
+  yTickFormatter,
   referenceY,
+  referenceLabel,
 }: DailyLinesChartProps) {
+  const formatValue = (value: number) =>
+    valueFormatter ? valueFormatter(value) : value.toLocaleString();
+  // With ≤2 days a line is invisible (or a single stranded segment) — show dots.
+  const sparse = data.length <= 2;
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart
         data={[...data]}
-        margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+        margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#E1E2E6" />
-        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke={CHART_CHROME.grid}
+          vertical={false}
+        />
+        <XAxis
+          dataKey="date"
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={formatDateTick}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
+          minTickGap={24}
+        />
         <YAxis
-          tick={{ fontSize: 11 }}
-          width={48}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={yTickFormatter}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
+          width={yLabel ? 64 : 48}
           label={
             yLabel
               ? {
@@ -55,19 +92,25 @@ export function DailyLinesChart({
                   angle: -90,
                   position: "insideLeft",
                   fontSize: 11,
+                  fill: CHART_CHROME.axisTick,
                 }
               : undefined
           }
         />
         <Tooltip
-          formatter={(value: unknown, name: unknown) => [
-            valueFormatter
-              ? valueFormatter(Number(value))
-              : Number(value).toLocaleString(),
-            String(name),
-          ]}
+          cursor={{ stroke: CHART_CHROME.axisTick, strokeDasharray: "3 3" }}
+          content={
+            <ChartTooltip
+              formatValue={formatValue}
+              formatLabel={(label) => formatReportDate(String(label ?? ""))}
+            />
+          }
         />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Legend
+          verticalAlign="top"
+          itemSorter={null}
+          content={<ChartLegend />}
+        />
         {series.map((s) => (
           <Line
             key={s.key}
@@ -76,15 +119,31 @@ export function DailyLinesChart({
             name={s.label}
             stroke={s.color}
             strokeWidth={2}
-            dot={{ r: 2.5 }}
+            strokeDasharray={s.dashed ? "6 3" : undefined}
+            dot={sparse ? { r: 3, fill: s.color, strokeWidth: 0 } : false}
+            activeDot={{
+              r: 4,
+              stroke: CHART_CHROME.surface,
+              strokeWidth: 2,
+            }}
             isAnimationActive={false}
           />
         ))}
         {referenceY !== undefined ? (
           <ReferenceLine
             y={referenceY}
-            stroke="#e5484d"
+            stroke={CHART_CHROME.reference}
             strokeDasharray="6 4"
+            label={
+              referenceLabel
+                ? {
+                    value: referenceLabel,
+                    position: "insideTopRight",
+                    fontSize: 10,
+                    fill: CHART_CHROME.reference,
+                  }
+                : undefined
+            }
           />
         ) : null}
       </LineChart>

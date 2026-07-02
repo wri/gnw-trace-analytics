@@ -5,13 +5,16 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { categoryColor } from "@/components/charts/palette";
+import { categoryColor, CHART_CHROME } from "@/components/charts/palette";
 import { formatCount } from "@/lib/format";
+import { ChartTooltip } from "@/components/charts/ChartTooltip";
+import { ChartLegend } from "@/components/charts/ChartLegend";
 
 export interface HorizontalBarDatum {
   readonly label: string;
@@ -26,11 +29,11 @@ interface HorizontalBarChartProps {
   readonly barHeight?: number;
 }
 
-/** Horizontal count bars (AOI names / top categories equivalent). */
+/** Horizontal count bars with direct value labels at the bar ends. */
 export function HorizontalBarChart({
   data,
-  color = "#0068C9",
-  barHeight = 22,
+  color = "#3361C0",
+  barHeight = 24,
 }: HorizontalBarChartProps) {
   const height = Math.max(200, Math.min(800, data.length * barHeight + 40));
   const categories = [
@@ -38,41 +41,95 @@ export function HorizontalBarChart({
   ] as string[];
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart
-        data={[...data]}
-        layout="vertical"
-        margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
-      >
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke="#E1E2E6"
-          horizontal={false}
+    <>
+      {categories.length > 0 ? (
+        <ChartLegend
+          payload={categories.map((c, i) => ({
+            value: c,
+            color: categoryColor(i),
+          }))}
         />
-        <XAxis type="number" tick={{ fontSize: 11 }} />
-        <YAxis
-          type="category"
-          dataKey="label"
-          width={160}
-          tick={{ fontSize: 11 }}
-          interval={0}
-        />
-        <Tooltip
-          formatter={(value: unknown) => [formatCount(Number(value)), "Count"]}
-        />
-        <Bar dataKey="count" isAnimationActive={false}>
-          {data.map((entry) => (
-            <Cell
-              key={entry.label}
-              fill={
-                entry.category
-                  ? categoryColor(categories.indexOf(entry.category))
-                  : color
-              }
+      ) : null}
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart
+          data={[...data]}
+          layout="vertical"
+          margin={{ top: 4, right: 44, bottom: 4, left: 8 }}
+          barCategoryGap={3}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke={CHART_CHROME.grid}
+            horizontal={false}
+          />
+          <XAxis
+            type="number"
+            axisLine={false}
+            tickLine={false}
+            tick={{
+              fontSize: CHART_CHROME.tickFontSize,
+              fill: CHART_CHROME.axisTick,
+            }}
+          />
+          <YAxis
+            type="category"
+            dataKey="label"
+            width={180}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(value: string) =>
+              value.length > 26 ? `${value.slice(0, 25)}…` : value
+            }
+            tick={{
+              fontSize: CHART_CHROME.tickFontSize,
+              fill: CHART_CHROME.axisTick,
+            }}
+            interval={0}
+          />
+          <Tooltip
+            cursor={{ fill: "rgba(19, 23, 26, 0.05)" }}
+            content={
+              <ChartTooltip
+                formatValue={(v) => formatCount(v)}
+                formatLabel={(_, payload) => {
+                  const first = payload?.[0]?.payload as
+                    { label?: string; category?: string | null } | undefined;
+                  return first?.category
+                    ? `${first.label} · ${first.category}`
+                    : (first?.label ?? "");
+                }}
+              />
+            }
+          />
+          <Bar
+            dataKey="count"
+            name="Count"
+            radius={[0, 3, 3, 0]}
+            isAnimationActive={false}
+          >
+            {data.map((entry) => (
+              <Cell
+                key={entry.label}
+                fill={
+                  entry.category
+                    ? categoryColor(categories.indexOf(entry.category))
+                    : color
+                }
+              />
+            ))}
+            <LabelList
+              dataKey="count"
+              position="right"
+              formatter={(v: unknown) => formatCount(Number(v))}
+              style={{
+                fontSize: 10,
+                fill: CHART_CHROME.axisTick,
+                fontVariantNumeric: "tabular-nums",
+              }}
             />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </>
   );
 }

@@ -12,9 +12,14 @@ import {
 } from "recharts";
 import type { DailyMetrics } from "@/lib/analytics/daily";
 import {
+  CHART_CHROME,
   OUTCOME_COLORS,
   OUTCOME_STACK_ORDER,
 } from "@/components/charts/palette";
+import { formatDateTick } from "@/components/charts/axis";
+import { ChartTooltip } from "@/components/charts/ChartTooltip";
+import { ChartLegend } from "@/components/charts/ChartLegend";
+import { formatCount, formatReportDate } from "@/lib/format";
 
 interface DailyOutcomeAreaChartProps {
   readonly data: readonly DailyMetrics[];
@@ -29,7 +34,7 @@ const SERIES: readonly { key: keyof DailyMetrics; label: string }[] = [
   { key: "successRate", label: "Success" },
 ];
 
-/** Normalized stacked area of daily outcome rates. */
+/** Normalized stacked area of daily outcome rates (success stacks on top). */
 export function DailyOutcomeAreaChart({
   data,
   height = 260,
@@ -37,27 +42,65 @@ export function DailyOutcomeAreaChart({
   const ordered = OUTCOME_STACK_ORDER.map(
     (label) => SERIES.find((s) => s.label === label) as (typeof SERIES)[number],
   );
+  // With ≤2 days an area has no width to paint — show dots at each value.
+  const sparse = data.length <= 2;
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart
         data={[...data]}
         stackOffset="expand"
-        margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+        margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#E1E2E6" />
-        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke={CHART_CHROME.grid}
+          vertical={false}
+        />
+        <XAxis
+          dataKey="date"
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={formatDateTick}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
+          minTickGap={24}
+        />
         <YAxis
           tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
-          tick={{ fontSize: 11 }}
-          width={44}
+          axisLine={false}
+          tickLine={false}
+          tick={{
+            fontSize: CHART_CHROME.tickFontSize,
+            fill: CHART_CHROME.axisTick,
+          }}
+          width={48}
         />
         <Tooltip
-          formatter={(value: unknown, name: unknown) => [
-            `${(Number(value) * 100).toFixed(1)}%`,
-            String(name),
-          ]}
+          content={
+            <ChartTooltip
+              reverse
+              colorMap={OUTCOME_COLORS}
+              formatValue={(v) => `${(v * 100).toFixed(1)}%`}
+              formatLabel={(label, payload) => {
+                const date = formatReportDate(String(label ?? ""));
+                const day = payload?.[0]?.payload as
+                  { traces?: number } | undefined;
+                // Day volume contextualises the shares — 100% of 3 traces
+                // is noise, 100% of 300 is a signal.
+                return typeof day?.traces === "number"
+                  ? `${date} · ${formatCount(day.traces)} traces`
+                  : date;
+              }}
+            />
+          }
         />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Legend
+          verticalAlign="top"
+          itemSorter={null}
+          content={<ChartLegend reverse colorMap={OUTCOME_COLORS} />}
+        />
         {ordered.map((s) => (
           <Area
             key={s.key}
@@ -65,9 +108,15 @@ export function DailyOutcomeAreaChart({
             dataKey={s.key}
             name={s.label}
             stackId="outcomes"
-            stroke={OUTCOME_COLORS[s.label]}
+            stroke={CHART_CHROME.surface}
+            strokeWidth={1}
             fill={OUTCOME_COLORS[s.label]}
-            fillOpacity={0.85}
+            fillOpacity={0.9}
+            dot={
+              sparse
+                ? { r: 3, fill: OUTCOME_COLORS[s.label], strokeWidth: 0 }
+                : false
+            }
             isAnimationActive={false}
           />
         ))}

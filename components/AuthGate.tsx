@@ -7,14 +7,28 @@
  */
 
 import { ReactNode, useEffect } from "react";
-import { Box, Button, Center, Heading, Spinner, Text, VStack } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  Center,
+  Heading,
+  Spinner,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
 import { useAuthStore } from "@/stores/authStore";
-import { clearToken, getLoginUrl, getToken, isTokenExpired } from "@/lib/auth/token";
+import {
+  clearToken,
+  getLoginUrl,
+  getToken,
+  isTokenExpired,
+} from "@/lib/auth/token";
 import { fetchCurrentUser } from "@/lib/api/users";
 import { ApiError } from "@/lib/api/http";
 
 export function AuthGate({ children }: { readonly children: ReactNode }) {
-  const { status, user, error, setLoading, setSignedOut, setUser } = useAuthStore();
+  const { status, user, error, setLoading, setSignedOut, setUser } =
+    useAuthStore();
 
   useEffect(() => {
     let cancelled = false;
@@ -36,12 +50,17 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
         if (!cancelled) setUser(currentUser);
       } catch (err) {
         if (cancelled) return;
-        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        if (
+          err instanceof ApiError &&
+          (err.status === 401 || err.status === 403)
+        ) {
           clearToken();
-          setSignedOut("Your session is no longer valid — please sign in again.");
+          setSignedOut(
+            "Your session is no longer valid — please sign in again.",
+          );
         } else {
           setSignedOut(
-            err instanceof Error ? err.message : "Could not load your profile."
+            err instanceof Error ? err.message : "Could not load your profile.",
           );
         }
       }
@@ -119,20 +138,35 @@ function GateScreen({
   readonly action: ReactNode;
 }) {
   return (
-    <Center minH="100vh" bg="bg.subtle" px={4}>
+    <Center minH="100vh" bgGradient="skyLight" px={4}>
       <Box
         bg="bg.panel"
         borderWidth="1px"
         borderColor="border"
-        borderRadius="xl"
+        borderTop="4px solid"
+        borderTopColor="lime.400"
+        borderRadius="sm"
         p={10}
         maxW="md"
         textAlign="center"
+        boxShadow="0px 4px 24px rgba(14, 30, 60, 0.08)"
       >
         <VStack gap={4}>
-          <Heading size="lg" color="primary.fg">
-            {title}
-          </Heading>
+          <Box>
+            <Text
+              fontSize="2xs"
+              fontFamily="mono"
+              textTransform="uppercase"
+              letterSpacing="0.08em"
+              color="fg.subtle"
+              mb={2}
+            >
+              Global Nature Watch
+            </Text>
+            <Heading size="lg" color="neutral.900">
+              {title}
+            </Heading>
+          </Box>
           <Text color="fg.muted">{body}</Text>
           {action}
         </VStack>

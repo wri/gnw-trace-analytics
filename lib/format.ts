@@ -11,16 +11,31 @@ export function formatReportDate(isoDate: string | null | undefined): string {
   const suffix =
     mod100 >= 11 && mod100 <= 13
       ? "th"
-      : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ?? "th";
+      : (({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ??
+        "th");
 
-  const weekday = dt.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
-  const month = dt.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  const weekday = dt.toLocaleDateString("en-GB", {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  const month = dt.toLocaleDateString("en-GB", {
+    month: "short",
+    timeZone: "UTC",
+  });
   return `${weekday} ${day}${suffix} ${month}`;
 }
 
 /** Thousands-separated integer, e.g. 12,345. */
 export function formatCount(n: number): string {
   return Math.round(n).toLocaleString("en-US");
+}
+
+/** Compact count for dense axes, e.g. 12400 → "12.4K". */
+export function formatCompact(n: number): string {
+  return Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n);
 }
 
 /** Percentage with one decimal, e.g. "12.3%". */
@@ -36,6 +51,15 @@ export function formatUsd(value: number, decimals = 4): string {
 /** Seconds with two decimals, e.g. "1.23s". */
 export function formatSeconds(value: number, decimals = 2): string {
   return `${value.toFixed(decimals)}s`;
+}
+
+/** ISO 639-1 code → English language name, e.g. "es" → "Spanish". */
+export function languageName(code: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }
 
 /** Collapse whitespace and truncate to maxLen, appending an ellipsis. */
