@@ -2,10 +2,12 @@
 
 /**
  * Trace Explorer — list/filter traces from the Zeno API and inspect a single
- * trace in detail (full conversation comes live from Langfuse).
+ * trace in detail (full conversation comes live from Langfuse). Supports
+ * deep links: /traces?session=<id> and /traces?trace=<id> auto-fetch.
  */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Box,
   Button,
@@ -37,19 +39,26 @@ function entryLabel(entry: TraceListEntry): string {
 }
 
 function ExplorerView() {
+  const searchParams = useSearchParams();
   const { startDate, endDate, environment } = useFiltersStore();
   const store = useExplorerStore();
 
-  const [sessionIdFilter, setSessionIdFilter] = useState("");
-  const [traceIdFilter, setTraceIdFilter] = useState("");
+  const [sessionIdFilter, setSessionIdFilter] = useState(
+    () => searchParams.get("session") ?? ""
+  );
+  const [traceIdFilter, setTraceIdFilter] = useState(
+    () => searchParams.get("trace") ?? ""
+  );
   const [promptFilter, setPromptFilter] = useState("");
   const [hideEmpty, setHideEmpty] = useState(true);
   const [showRaw, setShowRaw] = useState(false);
+  const autoFetchedRef = useRef(false);
 
-  async function handleFetch() {
+  async function handleFetch(overrides?: { sessionId?: string; traceId?: string }) {
     store.start();
     try {
-      const traceId = traceIdFilter.trim();
+      const traceId = (overrides?.traceId ?? traceIdFilter).trim();
+      const sessionId = (overrides?.sessionId ?? sessionIdFilter).trim();
       if (traceId) {
         // Exact trace id → fetch the single detail directly.
         const detail = await fetchTraceDetail(traceId);
@@ -68,7 +77,7 @@ function ExplorerView() {
             startDate,
             endDate,
             environment: environment === "all" ? undefined : environment,
-            sessionId: sessionIdFilter.trim() || undefined,
+            sessionId: sessionId || undefined,
             promptContains: promptFilter.trim() || undefined,
           },
           {
@@ -82,6 +91,17 @@ function ExplorerView() {
       store.fail(error instanceof Error ? error.message : String(error));
     }
   }
+
+  // Deep links (?session= / ?trace=) fetch immediately on arrival.
+  useEffect(() => {
+    if (autoFetchedRef.current) return;
+    const session = searchParams.get("session");
+    const trace = searchParams.get("trace");
+    if (!session && !trace) return;
+    autoFetchedRef.current = true;
+    void handleFetch({ sessionId: session ?? "", traceId: trace ?? "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const selectedId = store.selectedId;
   const detail = selectedId ? store.detailCache[selectedId] : undefined;
@@ -163,7 +183,7 @@ function ExplorerView() {
           <Button
             size="sm"
             colorPalette="primary"
-            onClick={handleFetch}
+            onClick={() => handleFetch()}
             loading={store.status === "loading"}
             loadingText={`Fetching… ${formatCount(store.progress)}`}
           >
@@ -256,7 +276,9 @@ export default function TracesPage() {
   return (
     <AuthGate>
       <AppShell>
-        <ExplorerView />
+        <Suspense fallback={null}>
+          <ExplorerView />
+        </Suspense>
       </AppShell>
     </AuthGate>
   );

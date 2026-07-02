@@ -6,14 +6,20 @@ Streamlit tool), rebuilt to match GNW's look and feel and gated to **superusers*
 
 ## What it does
 
+Data auto-fetches when you change the date range or environment (no fetch buttons),
+and the **previous window of equal length is fetched alongside** so headline numbers
+carry period-over-period deltas.
+
 | Page | Source | Description |
 |------|--------|-------------|
-| **📊 Analytics** | `GET /api/traces` (Zeno API) | Aggregate volume, outcomes, cost, latency, prompt utilisation, user segmentation (New vs Returning, Engaged), starter-prompt mix, prompt lengths, datasets/AOI usage and tool metrics. CSV export + copy-for-Slack summary. |
-| **🔎 Trace Explorer** | `GET /api/traces`, `GET /api/traces/{id}` | Filter traces (session id / trace id / prompt substring), then inspect a single trace: active turn, tool calls with results, output messages, cleaned + raw JSON, JSON download. The full conversation is fetched live from Langfuse by the Zeno API. |
-| **🔗 Conversation Browser** | `GET /api/traces/sessions` | One row per conversation thread with first prompt, turn count and a deep link into the GNW Threads UI. CSV export. |
+| **📊 Analytics** | `GET /api/traces` (Zeno API) | Product-focused tabs: **Overview** (KPI cards with vs-previous-period deltas, daily volume with 7-day average, daily outcomes, Slack summary + CSV export) · **Users** (acquisition/engagement segmentation, weekly retention cohorts, top users with email lookup and drill-through, prompt utilisation) · **Quality** (outcome mix, internal vs user-visible errors, tool usage) · **Performance** (cost + latency) · **Content** (prompt lengths, starter-prompt mix, datasets/AOI usage). |
+| **🔎 Trace Explorer** | `GET /api/traces`, `GET /api/traces/{id}` | Filter traces (session id / trace id / prompt substring), then inspect a single trace: active turn, tool calls with results, output messages, cleaned + raw JSON, JSON download. Deep links `/traces?session=<id>` and `/traces?trace=<id>` auto-fetch. |
+| **🔗 Conversation Browser** | `GET /api/traces/sessions` | Every thread in the window with search, sortable columns, pagination, user email column, `?user=<id>` filtering (linked from Top Users) and per-row links to the GNW Threads UI and the Trace Explorer. CSV export. |
 
-User data (for New vs Returning segmentation) comes from `GET /api/admin/users`
-(superuser-only): each account's `createdAt` is used as its first-seen date.
+User data comes from `GET /api/admin/users` (superuser-only) and is loaded
+automatically once per session: each account's `createdAt` is the first-seen date
+for New vs Returning and retention cohorts, and the id → email map makes user
+tables human-readable.
 
 Langfuse remains the source of truth for raw traces — this app only consumes the
 Zeno API's server-side derived/aggregated data and never talks to Langfuse directly.

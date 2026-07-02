@@ -14,9 +14,16 @@ interface SummarySectionProps {
   readonly context: ReportContext;
   readonly rows: readonly TraceRow[];
   readonly baseThreadUrl: string;
+  /** Override the section heading (defaults to "Summary Statistics (…)"). */
+  readonly heading?: string;
 }
 
-export function SummarySection({ context, rows, baseThreadUrl }: SummarySectionProps) {
+export function SummarySection({
+  context,
+  rows,
+  baseThreadUrl,
+  heading,
+}: SummarySectionProps) {
   const [copied, setCopied] = useState(false);
   const slackSummary = useMemo(() => buildSlackSummary(context), [context]);
   const tableRows = useMemo(() => buildSummaryTable(context), [context]);
@@ -44,8 +51,8 @@ export function SummarySection({ context, rows, baseThreadUrl }: SummarySectionP
   return (
     <Box>
       <Heading as="h3" size="md" mb={3}>
-        Summary Statistics ({days} days: {formatReportDate(context.startDate)} to{" "}
-        {formatReportDate(context.endDate)})
+        {heading ??
+          `Summary Statistics (${days} days: ${formatReportDate(context.startDate)} to ${formatReportDate(context.endDate)})`}
       </Heading>
 
       <Flex direction="column" gap={3}>
@@ -67,36 +74,38 @@ export function SummarySection({ context, rows, baseThreadUrl }: SummarySectionP
           </Box>
         </Expander>
 
-        <Box bg="bg.panel" borderWidth="1px" borderColor="border" borderRadius="lg" overflowX="auto">
-          <Table.Root size="sm" striped>
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeader>Section</Table.ColumnHeader>
-                <Table.ColumnHeader>Metric</Table.ColumnHeader>
-                <Table.ColumnHeader>Value</Table.ColumnHeader>
-                <Table.ColumnHeader>Description</Table.ColumnHeader>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {tableRows.map((row) => (
-                <Table.Row key={`${row.section}-${row.metric}`}>
-                  <Table.Cell>
-                    <Text fontSize="xs" color="fg.muted">
-                      {row.section}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell fontWeight="medium">{row.metric}</Table.Cell>
-                  <Table.Cell fontFamily="mono">{row.value}</Table.Cell>
-                  <Table.Cell>
-                    <Text fontSize="xs" color="fg.muted">
-                      {row.description}
-                    </Text>
-                  </Table.Cell>
+        <Expander title="📑 Full metric table (with definitions)">
+          <Box overflowX="auto">
+            <Table.Root size="sm" striped>
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeader>Section</Table.ColumnHeader>
+                  <Table.ColumnHeader>Metric</Table.ColumnHeader>
+                  <Table.ColumnHeader>Value</Table.ColumnHeader>
+                  <Table.ColumnHeader>Description</Table.ColumnHeader>
                 </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
-        </Box>
+              </Table.Header>
+              <Table.Body>
+                {tableRows.map((row) => (
+                  <Table.Row key={`${row.section}-${row.metric}`}>
+                    <Table.Cell>
+                      <Text fontSize="xs" color="fg.muted">
+                        {row.section}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell fontWeight="medium">{row.metric}</Table.Cell>
+                    <Table.Cell fontFamily="mono">{row.value}</Table.Cell>
+                    <Table.Cell>
+                      <Text fontSize="xs" color="fg.muted">
+                        {row.description}
+                      </Text>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          </Box>
+        </Expander>
 
         <Box>
           <Button size="sm" variant="outline" onClick={downloadReportCsv}>

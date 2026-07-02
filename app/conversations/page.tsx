@@ -1,45 +1,79 @@
 "use client";
 
-/** Conversation Browser — one row per thread, from GET /api/traces/sessions. */
+/**
+ * Conversation Browser — one row per thread from GET /api/traces/sessions,
+ * with search, sorting, pagination and drill-through into the Trace Explorer.
+ */
 
-import { useMemo } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Box,
   Button,
   Flex,
   Heading,
+  Input,
   Link as ChakraLink,
+  Spinner,
   Table,
+  Tag,
   Text,
 } from "@chakra-ui/react";
 import {
+  ArrowsClockwiseIcon,
   ArrowSquareOutIcon,
+  CaretDownIcon,
+  CaretUpIcon,
   DownloadSimpleIcon,
-  RocketLaunchIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
 import { FiltersBar } from "@/components/FiltersBar";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { useFiltersStore } from "@/stores/filtersStore";
-import { useSessionsStore } from "@/stores/dataStores";
+import { useSessionsStore, useUsersStore } from "@/stores/dataStores";
 import { fetchSessions } from "@/lib/api/zeno";
+import { buildUserFirstSeenMap, fetchAllUsers } from "@/lib/api/users";
 import { keepUserId } from "@/lib/filters";
 import { baseThreadUrl } from "@/lib/config";
 import { downloadText, toCsv } from "@/lib/csv";
-import { formatCount, formatReportDate, snippet } from "@/lib/format";
+import { formatCount, snippet } from "@/lib/format";
+
+const PAGE_SIZE = 50;
+const AUTO_FETCH_DEBOUNCE_MS = 400;
+
+type SortKey = "first" | "last" | "turns";
 
 function formatTimestamp(iso: string | null): string {
   if (!iso) return "";
-  return iso.slice(0, 19).replace("T", " ");
+  return iso.slice(0, 16).replace("T", " ");
 }
 
 function ConversationsView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const userFilter = searchParams.get("user");
+
   const { startDate, endDate, environment, excludeInternal } = useFiltersStore();
   const store = useSessionsStore();
+  const users = useUsersStore();
+  const abortRef = useRef<AbortController | null>(null);
 
-  async function handleFetch() {
-    store.start();
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("last");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [page, setPage] = useState(0);
+
+  const signature = `${startDate}|${endDate}|${environment}`;
+  const validRange = Boolean(startDate && endDate && startDate <= endDate);
+
+  async function runFetch(sig: string) {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    store.start(sig);
     try {
       const sessions = await fetchSessions(
         {
@@ -47,78 +81,157 @@ function ConversationsView() {
           endDate,
           environment: environment === "all" ? undefined : environment,
         },
-        { onProgress: (fetched) => store.setProgress(fetched) }
+        {
+          signal: controller.signal,
+          onProgress: (fetched) => store.setProgress(fetched),
+        }
       );
-      store.succeed(sessions);
+      if (controller.signal.aborted) return;
+      store.succeed(sessions, sig);
     } catch (error) {
+      if (controller.signal.aborted) return;
       store.fail(error instanceof Error ? error.message : String(error));
     }
   }
 
+  useEffect(() => {
+    if (!validRange) return;
+    if (store.signature === signature && store.status !== "idle") return;
+    const timer = setTimeout(() => void runFetch(signature), AUTO_FETCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, validRange]);
+
+  // Load user emails once so rows show people, not opaque ids.
+  useEffect(() => {
+    if (users.status !== "idle") return;
+    users.start();
+    fetchAllUsers()
+      .then((all) => users.succeed(all, buildUserFirstSeenMap(all)))
+      .catch((error) =>
+        users.fail(error instanceof Error ? error.message : String(error))
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const threadUrl = baseThreadUrl(environment);
-  const rows = useMemo(
-    () =>
-      store.sessions
-        .filter(
-          (s) =>
-            keepUserId(s.userId, { excludeInternal }) &&
-            (environment === "all" || s.environment === environment)
-        )
-        .map((s) => ({
-          sessionId: s.sessionId,
-          firstTimestamp: s.firstTimestamp,
-          lastTimestamp: s.lastTimestamp,
-          turnCount: s.turnCount,
-          promptSnippet: snippet(s.firstPrompt, 120),
-          url: `${threadUrl}/${s.sessionId}`,
-        })),
-    [store.sessions, excludeInternal, environment, threadUrl]
-  );
+
+  const rows = useMemo(() => {
+    const searchLower = search.trim().toLowerCase();
+    const filtered = store.sessions.filter((s) => {
+      if (!keepUserId(s.userId, { excludeInternal })) return false;
+      if (environment !== "all" && s.environment !== environment) return false;
+      if (userFilter && s.userId !== userFilter) return false;
+      if (searchLower && !s.firstPrompt.toLowerCase().includes(searchLower)) return false;
+      return true;
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "turns") {
+        cmp = a.turnCount - b.turnCount;
+      } else if (sortKey === "first") {
+        cmp = String(a.firstTimestamp ?? "").localeCompare(String(b.firstTimestamp ?? ""));
+      } else {
+        cmp = String(a.lastTimestamp ?? "").localeCompare(String(b.lastTimestamp ?? ""));
+      }
+      return sortAsc ? cmp : -cmp;
+    });
+    return sorted;
+  }, [store.sessions, excludeInternal, environment, userFilter, search, sortKey, sortAsc]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = rows.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+    setPage(0);
+  }
+
+  function sortIndicator(key: SortKey) {
+    if (sortKey !== key) return null;
+    return sortAsc ? <CaretUpIcon /> : <CaretDownIcon />;
+  }
 
   function handleDownloadCsv() {
     downloadText(
       toCsv(
-        rows.map(({ firstTimestamp, lastTimestamp, turnCount, promptSnippet, url }) => ({
-          first_timestamp: firstTimestamp,
-          last_timestamp: lastTimestamp,
-          turn_count: turnCount,
-          prompt_snippet: promptSnippet,
-          url,
+        rows.map((s) => ({
+          first_timestamp: s.firstTimestamp,
+          last_timestamp: s.lastTimestamp,
+          turn_count: s.turnCount,
+          user_id: s.userId,
+          user_email: users.emailByUserId?.get(s.userId) ?? "",
+          prompt_snippet: snippet(s.firstPrompt, 120),
+          url: `${threadUrl}/${s.sessionId}`,
         }))
       ),
       "gnw_session_urls.csv"
     );
   }
 
+  const filterEmail = userFilter ? users.emailByUserId?.get(userFilter) : null;
+
   return (
     <Flex direction="column" gap={5}>
       <Box>
         <Heading size="lg">🔗 Conversation Browser</Heading>
         <Text color="fg.muted" fontSize="sm" mt={1}>
-          List conversation threads (one row per session, deduped server-side by the
-          Zeno API) with their first prompt and turn count, then export them to CSV ·{" "}
-          {formatReportDate(startDate)} → {formatReportDate(endDate)}
+          Every conversation thread in the window (deduped server-side by the Zeno
+          API) with its first prompt and turn count. Click through to the GNW Threads
+          UI or straight into the Trace Explorer.
         </Text>
       </Box>
 
       <Box bg="bg.panel" borderWidth="1px" borderColor="border" borderRadius="lg" p={4}>
         <FiltersBar />
-        <Flex gap={3} mt={4}>
-          <Button
+        <Flex gap={3} mt={4} wrap="wrap" align="center">
+          <Input
             size="sm"
-            colorPalette="primary"
-            onClick={handleFetch}
-            loading={store.status === "loading"}
-            loadingText={`Fetching… ${formatCount(store.progress)} sessions`}
-          >
-            <RocketLaunchIcon />
-            Fetch sessions
-          </Button>
+            width="280px"
+            placeholder="Search first prompts…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.currentTarget.value);
+              setPage(0);
+            }}
+          />
+          {userFilter ? (
+            <Tag.Root size="md" colorPalette="primary" variant="subtle">
+              <Tag.Label>User: {filterEmail ?? userFilter}</Tag.Label>
+              <Tag.EndElement>
+                <Tag.CloseTrigger onClick={() => router.replace("/conversations")}>
+                  <XIcon />
+                </Tag.CloseTrigger>
+              </Tag.EndElement>
+            </Tag.Root>
+          ) : null}
           {rows.length ? (
             <Button size="sm" variant="outline" onClick={handleDownloadCsv}>
               <DownloadSimpleIcon />
-              Download CSV
+              CSV ({formatCount(rows.length)})
             </Button>
+          ) : null}
+          <Box flex="1" />
+          {store.status === "loading" ? (
+            <Flex align="center" gap={2} fontSize="xs" color="fg.muted">
+              <Spinner size="xs" color="primary.solid" />
+              <Text>Fetching… {formatCount(store.progress)} sessions</Text>
+            </Flex>
+          ) : store.fetchedAt ? (
+            <Flex align="center" gap={1} fontSize="xs" color="fg.muted">
+              <Text>Data as of {new Date(store.fetchedAt).toLocaleTimeString()}</Text>
+              <Button size="xs" variant="ghost" onClick={() => void runFetch(signature)}>
+                <ArrowsClockwiseIcon />
+                Refresh
+              </Button>
+            </Flex>
           ) : null}
         </Flex>
       </Box>
@@ -127,18 +240,38 @@ function ConversationsView() {
         <InlineAlert status="error" title="Session fetch failed" message={store.error} />
       ) : null}
 
-      {store.status !== "loaded" ? (
-        <InlineAlert
-          status="info"
-          message="This page turns Zeno-API sessions into a list of unique conversation links that open the GNW Threads UI. Set the date range / environment above, then click “Fetch sessions”."
-        />
-      ) : rows.length === 0 ? (
+      {store.status === "loaded" && rows.length === 0 ? (
         <InlineAlert status="warning" message="No sessions found for the selected window/filters." />
-      ) : (
+      ) : rows.length > 0 ? (
         <Box>
-          <Text fontWeight="semibold" mb={2}>
-            {formatCount(rows.length)} unique conversation threads
-          </Text>
+          <Flex justify="space-between" align="center" mb={2}>
+            <Text fontWeight="semibold">
+              {formatCount(rows.length)} conversation threads
+            </Text>
+            {pageCount > 1 ? (
+              <Flex gap={2} align="center" fontSize="sm">
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={safePage === 0}
+                  onClick={() => setPage(safePage - 1)}
+                >
+                  Prev
+                </Button>
+                <Text color="fg.muted">
+                  Page {safePage + 1} / {pageCount}
+                </Text>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setPage(safePage + 1)}
+                >
+                  Next
+                </Button>
+              </Flex>
+            ) : null}
+          </Flex>
           <Box
             bg="bg.panel"
             borderWidth="1px"
@@ -149,46 +282,89 @@ function ConversationsView() {
             <Table.Root size="sm" striped>
               <Table.Header>
                 <Table.Row>
-                  <Table.ColumnHeader>First timestamp</Table.ColumnHeader>
-                  <Table.ColumnHeader>Last timestamp</Table.ColumnHeader>
-                  <Table.ColumnHeader textAlign="right">Turns</Table.ColumnHeader>
+                  <Table.ColumnHeader cursor="pointer" onClick={() => toggleSort("first")}>
+                    <Flex align="center" gap={1}>
+                      Started {sortIndicator("first")}
+                    </Flex>
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader cursor="pointer" onClick={() => toggleSort("last")}>
+                    <Flex align="center" gap={1}>
+                      Last activity {sortIndicator("last")}
+                    </Flex>
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader
+                    cursor="pointer"
+                    textAlign="right"
+                    onClick={() => toggleSort("turns")}
+                  >
+                    <Flex align="center" gap={1} justify="flex-end">
+                      Turns {sortIndicator("turns")}
+                    </Flex>
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader>User</Table.ColumnHeader>
                   <Table.ColumnHeader>First prompt</Table.ColumnHeader>
-                  <Table.ColumnHeader>Link</Table.ColumnHeader>
+                  <Table.ColumnHeader>Open</Table.ColumnHeader>
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {rows.map((row) => (
-                  <Table.Row key={row.sessionId}>
-                    <Table.Cell fontFamily="mono" fontSize="xs" whiteSpace="nowrap">
-                      {formatTimestamp(row.firstTimestamp)}
-                    </Table.Cell>
-                    <Table.Cell fontFamily="mono" fontSize="xs" whiteSpace="nowrap">
-                      {formatTimestamp(row.lastTimestamp)}
-                    </Table.Cell>
-                    <Table.Cell textAlign="right">{row.turnCount}</Table.Cell>
-                    <Table.Cell>
-                      <Text fontSize="sm" lineClamp={2}>
-                        {row.promptSnippet}
-                      </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <ChakraLink
-                        href={row.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        color="fg.link"
-                        fontSize="sm"
-                        whiteSpace="nowrap"
-                      >
-                        Open <ArrowSquareOutIcon />
-                      </ChakraLink>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
+                {pageRows.map((row) => {
+                  const email = users.emailByUserId?.get(row.userId);
+                  return (
+                    <Table.Row key={row.sessionId}>
+                      <Table.Cell fontFamily="mono" fontSize="xs" whiteSpace="nowrap">
+                        {formatTimestamp(row.firstTimestamp)}
+                      </Table.Cell>
+                      <Table.Cell fontFamily="mono" fontSize="xs" whiteSpace="nowrap">
+                        {formatTimestamp(row.lastTimestamp)}
+                      </Table.Cell>
+                      <Table.Cell textAlign="right">{row.turnCount}</Table.Cell>
+                      <Table.Cell maxW="200px">
+                        <Link
+                          href={`/conversations?user=${encodeURIComponent(row.userId)}`}
+                          title={email ?? row.userId}
+                        >
+                          <Text
+                            fontSize="xs"
+                            color="fg.link"
+                            lineClamp={1}
+                            fontFamily={email ? undefined : "mono"}
+                          >
+                            {email ?? row.userId}
+                          </Text>
+                        </Link>
+                      </Table.Cell>
+                      <Table.Cell maxW="420px">
+                        <Text fontSize="sm" lineClamp={2}>
+                          {snippet(row.firstPrompt, 160)}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell whiteSpace="nowrap">
+                        <Flex gap={3} fontSize="sm">
+                          <ChakraLink
+                            href={`${threadUrl}/${row.sessionId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            color="fg.link"
+                          >
+                            GNW <ArrowSquareOutIcon />
+                          </ChakraLink>
+                          <Link href={`/traces?session=${encodeURIComponent(row.sessionId)}`}>
+                            <Text color="fg.link">Traces</Text>
+                          </Link>
+                        </Flex>
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
               </Table.Body>
             </Table.Root>
           </Box>
         </Box>
+      ) : store.status === "loading" ? null : (
+        <InlineAlert
+          status="info"
+          message="Sessions load automatically for the selected window — adjust the filters above."
+        />
       )}
     </Flex>
   );
@@ -198,7 +374,9 @@ export default function ConversationsPage() {
   return (
     <AuthGate>
       <AppShell>
-        <ConversationsView />
+        <Suspense fallback={null}>
+          <ConversationsView />
+        </Suspense>
       </AppShell>
     </AuthGate>
   );

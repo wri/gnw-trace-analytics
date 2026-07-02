@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Fetched-data stores. Data survives page navigation (like tracey's
- * session_state) and is refreshed explicitly via the Fetch buttons.
+ * Fetched-data stores. Data survives page navigation and refreshes
+ * automatically when the fetch signature (date window + environment)
+ * changes; stores keep the signature so unchanged filters reuse the cache.
  */
 
 import { create } from "zustand";
@@ -14,37 +15,65 @@ interface FetchMeta {
   readonly status: FetchStatus;
   readonly error: string | null;
   readonly progress: number;
+  /** Epoch ms of the last successful fetch. */
+  readonly fetchedAt: number | null;
+  /** Filter signature the current data was fetched with. */
+  readonly signature: string | null;
 }
 
-const idleMeta: FetchMeta = { status: "idle", error: null, progress: 0 };
+const idleMeta: FetchMeta = {
+  status: "idle",
+  error: null,
+  progress: 0,
+  fetchedAt: null,
+  signature: null,
+};
 
-// --- Analytics rows ---------------------------------------------------------
+// --- Analytics rows (current + previous window for deltas) -------------------
 
 interface AnalyticsState extends FetchMeta {
   readonly rows: readonly TraceRow[];
+  /** Rows for the equal-length window immediately before the current one. */
+  readonly prevRows: readonly TraceRow[] | null;
   readonly fetchedRange: { startDate: string; endDate: string } | null;
-  readonly start: () => void;
+  readonly start: (signature: string) => void;
   readonly setProgress: (progress: number) => void;
-  readonly succeed: (rows: readonly TraceRow[], startDate: string, endDate: string) => void;
+  readonly succeed: (payload: {
+    rows: readonly TraceRow[];
+    prevRows: readonly TraceRow[] | null;
+    startDate: string;
+    endDate: string;
+    signature: string;
+  }) => void;
   readonly fail: (error: string) => void;
 }
 
 export const useAnalyticsStore = create<AnalyticsState>()((set) => ({
   ...idleMeta,
   rows: [],
+  prevRows: null,
   fetchedRange: null,
-  start: () => set({ status: "loading", error: null, progress: 0 }),
+  start: (signature) => set({ status: "loading", error: null, progress: 0, signature }),
   setProgress: (progress) => set({ progress }),
-  succeed: (rows, startDate, endDate) =>
-    set({ status: "loaded", rows, error: null, fetchedRange: { startDate, endDate } }),
+  succeed: ({ rows, prevRows, startDate, endDate, signature }) =>
+    set({
+      status: "loaded",
+      rows,
+      prevRows,
+      error: null,
+      signature,
+      fetchedAt: Date.now(),
+      fetchedRange: { startDate, endDate },
+    }),
   fail: (error) => set({ status: "error", error }),
 }));
 
-// --- Users (first-seen source) ----------------------------------------------
+// --- Users (first-seen + id → email lookup) ----------------------------------
 
 interface UsersState extends FetchMeta {
   readonly users: readonly GnwUser[];
   readonly firstSeenByUser: ReadonlyMap<string, string> | null;
+  readonly emailByUserId: ReadonlyMap<string, string> | null;
   readonly start: () => void;
   readonly setProgress: (progress: number) => void;
   readonly succeed: (
@@ -58,10 +87,18 @@ export const useUsersStore = create<UsersState>()((set) => ({
   ...idleMeta,
   users: [],
   firstSeenByUser: null,
+  emailByUserId: null,
   start: () => set({ status: "loading", error: null, progress: 0 }),
   setProgress: (progress) => set({ progress }),
   succeed: (users, firstSeenByUser) =>
-    set({ status: "loaded", users, firstSeenByUser, error: null }),
+    set({
+      status: "loaded",
+      users,
+      firstSeenByUser,
+      emailByUserId: new Map(users.map((u) => [u.id, u.email])),
+      error: null,
+      fetchedAt: Date.now(),
+    }),
   fail: (error) => set({ status: "error", error }),
 }));
 
@@ -69,18 +106,19 @@ export const useUsersStore = create<UsersState>()((set) => ({
 
 interface SessionsState extends FetchMeta {
   readonly sessions: readonly SessionRow[];
-  readonly start: () => void;
+  readonly start: (signature: string) => void;
   readonly setProgress: (progress: number) => void;
-  readonly succeed: (sessions: readonly SessionRow[]) => void;
+  readonly succeed: (sessions: readonly SessionRow[], signature: string) => void;
   readonly fail: (error: string) => void;
 }
 
 export const useSessionsStore = create<SessionsState>()((set) => ({
   ...idleMeta,
   sessions: [],
-  start: () => set({ status: "loading", error: null, progress: 0 }),
+  start: (signature) => set({ status: "loading", error: null, progress: 0, signature }),
   setProgress: (progress) => set({ progress }),
-  succeed: (sessions) => set({ status: "loaded", sessions, error: null }),
+  succeed: (sessions, signature) =>
+    set({ status: "loaded", sessions, error: null, signature, fetchedAt: Date.now() }),
   fail: (error) => set({ status: "error", error }),
 }));
 
@@ -116,6 +154,7 @@ export const useExplorerStore = create<ExplorerState>()((set) => ({
       status: "loaded",
       entries,
       error: null,
+      fetchedAt: Date.now(),
       selectedId: entries.length ? entries[0].id : null,
     }),
   fail: (error) => set({ status: "error", error }),
