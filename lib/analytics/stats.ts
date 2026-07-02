@@ -34,8 +34,12 @@ export function median(values: readonly number[]): number {
 }
 
 /** Keep only finite numbers (drops null/undefined/NaN). */
-export function finiteNumbers(values: readonly (number | null | undefined)[]): number[] {
-  return values.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+export function finiteNumbers(
+  values: readonly (number | null | undefined)[],
+): number[] {
+  return values.filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v),
+  );
 }
 
 export interface HistogramBin {
@@ -56,11 +60,20 @@ function niceStep(rawStep: number): number {
   return 10 * base;
 }
 
+export interface BinOptions {
+  /** Force whole-number bin edges with step ≥ 1 (for count-like data). */
+  readonly integer?: boolean;
+}
+
 /**
  * Bin values into at most maxBins nice-width bins. Bins are half-open
  * [start, end) except the last, which includes its end.
  */
-export function binValues(values: readonly number[], maxBins = 30): HistogramBin[] {
+export function binValues(
+  values: readonly number[],
+  maxBins = 30,
+  options: BinOptions = {},
+): HistogramBin[] {
   const finite = finiteNumbers(values);
   if (!finite.length) return [];
 
@@ -70,9 +83,14 @@ export function binValues(values: readonly number[], maxBins = 30): HistogramBin
     return [{ binStart: lo, binEnd: hi, count: finite.length }];
   }
 
-  const step = niceStep((hi - lo) / maxBins);
+  const rawStep = niceStep((hi - lo) / maxBins);
+  const step = options.integer ? Math.max(1, Math.ceil(rawStep)) : rawStep;
   const start = Math.floor(lo / step) * step;
-  const binCount = Math.max(1, Math.ceil((hi - start) / step));
+  // Integer bins are exact [n, n+step) buckets, so the max needs its own bin;
+  // continuous bins fold the max into the final bin instead.
+  const binCount = options.integer
+    ? Math.floor((hi - start) / step) + 1
+    : Math.max(1, Math.ceil((hi - start) / step));
 
   const counts = new Array<number>(binCount).fill(0);
   for (const v of finite) {

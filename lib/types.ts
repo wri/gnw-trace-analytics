@@ -1,7 +1,8 @@
 /** Shared domain types for the GNW trace analytics app. */
 
 /** Outcome classification assigned server-side by the Zeno API. */
-export type TraceOutcome = "ANSWER" | "DEFER" | "SOFT_ERROR" | "ERROR" | "EMPTY";
+export type TraceOutcome =
+  "ANSWER" | "DEFER" | "SOFT_ERROR" | "ERROR" | "EMPTY";
 
 export const TRACE_OUTCOMES: readonly TraceOutcome[] = [
   "ANSWER",
@@ -39,6 +40,8 @@ export interface TraceRow {
   readonly primaryDatasetName: string | null;
   readonly hasInsight: boolean | null;
   readonly isGlobal: boolean | null;
+  /** ISO 639-1 code of the detected prompt language (langid, server-side). */
+  readonly language: string | null;
 }
 
 /** One conversation thread (deduped server-side by the Zeno API). */
@@ -74,6 +77,8 @@ export interface TraceDetail {
   readonly latencySeconds: number | null;
   readonly totalCost: number | null;
   readonly prompt: string;
+  /** Final extracted answer text (parsed server-side, present without raw). */
+  readonly answer: string | null;
   readonly rawAvailable: boolean;
   readonly input: { readonly messages: readonly AgentMessage[] } | null;
   readonly output: { readonly messages: readonly AgentMessage[] } | null;

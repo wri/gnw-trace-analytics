@@ -17,6 +17,8 @@ export interface DailyMetrics {
   readonly p95Cost: number;
   readonly meanLatency: number;
   readonly p95Latency: number;
+  readonly meanTokens: number;
+  readonly p95Tokens: number;
 }
 
 function rate(rows: readonly TraceRow[], outcome: string): number {
@@ -42,11 +44,16 @@ export function computeDailyMetrics(rows: readonly TraceRow[]): DailyMetrics[] {
     .map(([date, dayRows]) => {
       const costs = finiteNumbers(dayRows.map((r) => r.totalCost));
       const latencies = finiteNumbers(dayRows.map((r) => r.latencySeconds));
+      // turnTokens defaults to 0 when the API omits it — 0 means "unknown".
+      const tokens = finiteNumbers(dayRows.map((r) => r.turnTokens)).filter(
+        (t) => t > 0,
+      );
       return {
         date,
         traces: dayRows.length,
         uniqueUsers: new Set(dayRows.map((r) => r.userId).filter(Boolean)).size,
-        uniqueThreads: new Set(dayRows.map((r) => r.sessionId).filter(Boolean)).size,
+        uniqueThreads: new Set(dayRows.map((r) => r.sessionId).filter(Boolean))
+          .size,
         successRate: rate(dayRows, "ANSWER"),
         deferRate: rate(dayRows, "DEFER"),
         softErrorRate: rate(dayRows, "SOFT_ERROR"),
@@ -56,6 +63,8 @@ export function computeDailyMetrics(rows: readonly TraceRow[]): DailyMetrics[] {
         p95Cost: quantile(costs, 0.95),
         meanLatency: mean(latencies),
         p95Latency: quantile(latencies, 0.95),
+        meanTokens: mean(tokens),
+        p95Tokens: quantile(tokens, 0.95),
       };
     });
 }

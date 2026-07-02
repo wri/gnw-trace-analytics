@@ -22,6 +22,7 @@ export function makeRow(overrides: Partial<TraceRow> = {}): TraceRow {
     primaryDatasetName: null,
     hasInsight: null,
     isGlobal: null,
+    language: null,
     ...overrides,
   };
 }

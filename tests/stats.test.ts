@@ -51,10 +51,31 @@ describe("binValues", () => {
   });
 
   it("handles constant series with a single bin", () => {
-    expect(binValues([5, 5, 5], 30)).toEqual([{ binStart: 5, binEnd: 5, count: 3 }]);
+    expect(binValues([5, 5, 5], 30)).toEqual([
+      { binStart: 5, binEnd: 5, count: 3 },
+    ]);
   });
 
   it("returns empty for empty input", () => {
     expect(binValues([], 30)).toEqual([]);
+  });
+
+  it("integer mode uses whole-number steps and exact unit buckets", () => {
+    const values = [1, 1, 2, 3, 10];
+    const bins = binValues(values, 30, { integer: true });
+    // Small integer range → step 1, one bucket per value, max in its own bin.
+    expect(bins[0]).toEqual({ binStart: 1, binEnd: 2, count: 2 });
+    expect(bins[bins.length - 1]).toEqual({
+      binStart: 10,
+      binEnd: 11,
+      count: 1,
+    });
+    expect(bins.every((b) => Number.isInteger(b.binStart))).toBe(true);
+    expect(bins.reduce((acc, b) => acc + b.count, 0)).toBe(values.length);
+  });
+
+  it("integer mode never produces fractional steps for narrow ranges", () => {
+    const bins = binValues([1, 2, 3], 30, { integer: true });
+    expect(bins.map((b) => b.binEnd - b.binStart)).toEqual([1, 1, 1]);
   });
 });

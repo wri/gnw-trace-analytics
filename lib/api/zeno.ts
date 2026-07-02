@@ -46,6 +46,7 @@ const TraceListItemSchema = z.looseObject({
   primary_dataset_name: z.string().nullish(),
   has_insight: z.boolean().nullish(),
   is_global: z.boolean().nullish(),
+  language: z.string().nullish(),
 });
 
 type TraceListItem = z.infer<typeof TraceListItemSchema>;
@@ -78,9 +79,18 @@ const TraceDetailSchema = z.looseObject({
   latency_seconds: z.coerce.number().nullish(),
   total_cost: z.coerce.number().nullish(),
   prompt: z.string().nullish(),
+  answer: z.string().nullish(),
   raw_available: z.boolean().nullish(),
-  input: z.looseObject({ messages: z.array(z.record(z.string(), z.unknown())).default([]) }).nullish(),
-  output: z.looseObject({ messages: z.array(z.record(z.string(), z.unknown())).default([]) }).nullish(),
+  input: z
+    .looseObject({
+      messages: z.array(z.record(z.string(), z.unknown())).default([]),
+    })
+    .nullish(),
+  output: z
+    .looseObject({
+      messages: z.array(z.record(z.string(), z.unknown())).default([]),
+    })
+    .nullish(),
 });
 
 // ---------------------------------------------------------------------------
@@ -88,7 +98,10 @@ const TraceDetailSchema = z.looseObject({
 // ---------------------------------------------------------------------------
 
 /** Convert an inclusive [start, end] ISO-date range to half-open UTC instants. */
-export function windowIso(startDate: string, endDate: string): { start: string; end: string } {
+export function windowIso(
+  startDate: string,
+  endDate: string,
+): { start: string; end: string } {
   const start = new Date(`${startDate}T00:00:00Z`);
   const endExclusive = new Date(`${endDate}T00:00:00Z`);
   endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
@@ -97,7 +110,9 @@ export function windowIso(startDate: string, endDate: string): { start: string; 
 
 /** Map one Zeno TraceListItem onto the analytics row shape. */
 export function mapTraceRow(item: TraceListItem): TraceRow {
-  const timestampMs = item.trace_timestamp ? Date.parse(item.trace_timestamp) : NaN;
+  const timestampMs = item.trace_timestamp
+    ? Date.parse(item.trace_timestamp)
+    : NaN;
   const timestamp = Number.isFinite(timestampMs)
     ? new Date(timestampMs).toISOString()
     : null;
@@ -126,6 +141,7 @@ export function mapTraceRow(item: TraceListItem): TraceRow {
     primaryDatasetName: item.primary_dataset_name ?? null,
     hasInsight: item.has_insight ?? null,
     isGlobal: item.is_global ?? null,
+    language: item.language ?? null,
   };
 }
 
@@ -162,7 +178,7 @@ async function paginate<TItem>(
   url: string,
   baseParams: Record<string, string | number | undefined>,
   parsePage: (body: unknown) => { items: TItem[]; total: number },
-  options: PaginationOptions
+  options: PaginationOptions,
 ): Promise<TItem[]> {
   const { maxItems = 25000, signal, onProgress } = options;
   const headers = getAuthHeaders();
@@ -179,14 +195,20 @@ async function paginate<TItem>(
     items.push(...page.items);
     offset += page.items.length;
     onProgress?.(items.length, page.total);
-    if (!page.items.length || offset >= page.total || items.length >= maxItems) {
+    if (
+      !page.items.length ||
+      offset >= page.total ||
+      items.length >= maxItems
+    ) {
       break;
     }
   }
   return items.slice(0, maxItems);
 }
 
-function filterParams(filter: TracesFilter): Record<string, string | undefined> {
+function filterParams(
+  filter: TracesFilter,
+): Record<string, string | undefined> {
   const { start, end } = windowIso(filter.startDate, filter.endDate);
   return {
     start,
@@ -202,13 +224,13 @@ function filterParams(filter: TracesFilter): Record<string, string | undefined> 
 /** Paginate GET /api/traces and return mapped analytics rows. */
 export async function fetchTracesWindow(
   filter: TracesFilter,
-  options: PaginationOptions = {}
+  options: PaginationOptions = {},
 ): Promise<TraceRow[]> {
   const items = await paginate(
     `${API_HOST}/api/traces`,
     filterParams(filter),
     (body) => TraceListResponseSchema.parse(body),
-    options
+    options,
   );
   return items.map(mapTraceRow);
 }
@@ -216,21 +238,24 @@ export async function fetchTracesWindow(
 /** Paginate GET /api/traces and return raw picker entries (Trace Explorer). */
 export async function fetchTraceList(
   filter: TracesFilter,
-  options: PaginationOptions = {}
+  options: PaginationOptions = {},
 ): Promise<TraceListEntry[]> {
   const items = await paginate(
     `${API_HOST}/api/traces`,
     filterParams(filter),
     (body) => TraceListResponseSchema.parse(body),
-    options
+    options,
   );
   return items.map(toListEntry);
 }
 
 /** Paginate GET /api/traces/sessions (one row per thread, newest first). */
 export async function fetchSessions(
-  filter: Pick<TracesFilter, "startDate" | "endDate" | "environment" | "userId">,
-  options: PaginationOptions = {}
+  filter: Pick<
+    TracesFilter,
+    "startDate" | "endDate" | "environment" | "userId"
+  >,
+  options: PaginationOptions = {},
 ): Promise<SessionRow[]> {
   const { start, end } = windowIso(filter.startDate, filter.endDate);
   const items = await paginate(
@@ -242,7 +267,7 @@ export async function fetchSessions(
       user_id: filter.userId || undefined,
     },
     (body) => SessionsResponseSchema.parse(body),
-    options
+    options,
   );
   return items
     .filter((item) => item.session_id)
@@ -260,11 +285,11 @@ export async function fetchSessions(
 /** GET /api/traces/{id} — full detail incl. AgentState input/output. */
 export async function fetchTraceDetail(
   traceId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<TraceDetail> {
   const body = await requestJson(
     `${API_HOST}/api/traces/${encodeURIComponent(traceId)}`,
-    { headers: getAuthHeaders(), signal }
+    { headers: getAuthHeaders(), signal },
   );
   const parsed = TraceDetailSchema.parse(body);
   return {
@@ -275,6 +300,7 @@ export async function fetchTraceDetail(
     latencySeconds: parsed.latency_seconds ?? null,
     totalCost: parsed.total_cost ?? null,
     prompt: parsed.prompt ?? "",
+    answer: parsed.answer ?? null,
     rawAvailable: parsed.raw_available ?? false,
     input: parsed.input
       ? { messages: parsed.input.messages as AgentMessage[] }

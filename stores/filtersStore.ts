@@ -3,7 +3,7 @@
 /** Shared fetch filters (date window, environment, internal-user exclusion). */
 
 import { create } from "zustand";
-import type { EnvironmentOption } from "@/lib/config";
+import { EARLIEST_DATA_DATE, type EnvironmentOption } from "@/lib/config";
 import { shiftIsoDate, todayIso } from "@/lib/format";
 
 export const DATE_PRESETS = [
@@ -13,11 +13,14 @@ export const DATE_PRESETS = [
   "Last week",
   "Last 2 weeks",
   "Last month",
+  "All time",
 ] as const;
 
 export type DatePreset = (typeof DATE_PRESETS)[number];
 
-const PRESET_DAYS: Readonly<Record<Exclude<DatePreset, "Custom">, number>> = {
+const PRESET_DAYS: Readonly<
+  Record<Exclude<DatePreset, "Custom" | "All time">, number>
+> = {
   "Last day": 1,
   "Last 3 days": 3,
   "Last week": 7,
@@ -30,6 +33,9 @@ export function presetRange(preset: Exclude<DatePreset, "Custom">): {
   endDate: string;
 } {
   const endDate = todayIso();
+  if (preset === "All time") {
+    return { startDate: EARLIEST_DATA_DATE, endDate };
+  }
   return { startDate: shiftIsoDate(endDate, -PRESET_DAYS[preset]), endDate };
 }
 
