@@ -3,12 +3,16 @@
 import { useMemo } from "react";
 import { Box, Flex, Heading, SimpleGrid, Text } from "@chakra-ui/react";
 import type { TraceRow } from "@/lib/types";
-import { computePromptLengths } from "@/lib/analytics/aggregations";
+import {
+  computePromptLengths,
+  countCategories,
+} from "@/lib/analytics/aggregations";
 import { binValues, mean, median, quantile } from "@/lib/analytics/stats";
-import { formatCount } from "@/lib/format";
+import { formatCount, languageName } from "@/lib/format";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HistogramChart } from "@/components/charts/HistogramChart";
-import { Expander } from "@/components/ui/Expander";
+import { HorizontalBarChart } from "@/components/charts/HorizontalBarChart";
+import { InfoCallout } from "@/components/ui/InfoCallout";
 import { StatCards } from "@/components/ui/StatCards";
 
 interface PromptSectionProps {
@@ -22,7 +26,10 @@ function lengthStats(values: readonly number[]) {
     { label: "Median", value: median(values).toFixed(0) },
     { label: "P90", value: quantile(values, 0.9).toFixed(0) },
     { label: "P95", value: quantile(values, 0.95).toFixed(0) },
-    { label: "Max", value: values.length ? Math.max(...values).toFixed(0) : "0" },
+    {
+      label: "Max",
+      value: values.length ? Math.max(...values).toFixed(0) : "0",
+    },
   ];
 }
 
@@ -30,6 +37,17 @@ export function PromptSection({ rows }: PromptSectionProps) {
   const lengths = useMemo(() => computePromptLengths(rows), [rows]);
   const charBins = useMemo(() => binValues(lengths.chars, 60), [lengths]);
   const wordBins = useMemo(() => binValues(lengths.words, 60), [lengths]);
+  const languageCounts = useMemo(
+    () =>
+      countCategories(
+        rows.map((r) => r.language),
+        { topN: 12 },
+      ).map((entry) => ({
+        label: languageName(entry.label),
+        count: entry.count,
+      })),
+    [rows],
+  );
 
   return (
     <Box>
@@ -37,13 +55,11 @@ export function PromptSection({ rows }: PromptSectionProps) {
         Prompt Analysis
       </Heading>
       <Flex direction="column" gap={3}>
-        <Expander title="ℹ️ Prompt analysis explained">
-          <Text fontSize="sm">
-            Prompt-level metrics help understand what users are asking and how. Length
-            distributions reveal typical query complexity and outliers that may inflate
-            cost or latency.
-          </Text>
-        </Expander>
+        <InfoCallout title="Prompt analysis explained">
+          Prompt-level metrics help understand what users are asking and how.
+          Length distributions reveal typical query complexity and outliers that
+          may inflate cost or latency.
+        </InfoCallout>
         <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4}>
           <ChartCard
             title="Prompt length (characters)"
@@ -52,7 +68,11 @@ export function PromptSection({ rows }: PromptSectionProps) {
             {lengths.chars.length ? (
               <Flex direction="column" gap={3}>
                 <StatCards items={lengthStats(lengths.chars)} columns={6} />
-                <HistogramChart bins={charBins} height={180} countLabel="Prompts" />
+                <HistogramChart
+                  bins={charBins}
+                  height={180}
+                  countLabel="Prompts"
+                />
               </Flex>
             ) : (
               <Text fontSize="sm" color="fg.muted">
@@ -67,7 +87,11 @@ export function PromptSection({ rows }: PromptSectionProps) {
             {lengths.words.length ? (
               <Flex direction="column" gap={3}>
                 <StatCards items={lengthStats(lengths.words)} columns={6} />
-                <HistogramChart bins={wordBins} height={180} countLabel="Prompts" />
+                <HistogramChart
+                  bins={wordBins}
+                  height={180}
+                  countLabel="Prompts"
+                />
               </Flex>
             ) : (
               <Text fontSize="sm" color="fg.muted">
@@ -76,6 +100,24 @@ export function PromptSection({ rows }: PromptSectionProps) {
             )}
           </ChartCard>
         </SimpleGrid>
+        {languageCounts.length ? (
+          <ChartCard
+            title="Prompt language"
+            help="Detected language of user prompts (server-side langid, local fallback)."
+            info="Language detection is heuristic and skips very short prompts, so
+              counts undershoot the trace total. A meaningful non-English share
+              matters twice over: the UI is English-only, and the soft-error
+              detection heuristics only match English phrases — non-English
+              failures are systematically undercounted in the outcome data."
+          >
+            <HorizontalBarChart
+              data={languageCounts.map((l) => ({
+                label: l.label,
+                count: l.count,
+              }))}
+            />
+          </ChartCard>
+        ) : null}
       </Flex>
     </Box>
   );

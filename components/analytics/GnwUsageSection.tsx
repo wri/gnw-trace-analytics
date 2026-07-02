@@ -1,16 +1,41 @@
 "use client";
 
 import { useMemo } from "react";
-import { Box, Flex, Heading, SimpleGrid, Text } from "@chakra-ui/react";
+import { Box, Flex, Heading, SimpleGrid } from "@chakra-ui/react";
 import type { TraceRow } from "@/lib/types";
 import { countAoiNames, countCategories } from "@/lib/analytics/aggregations";
+import { computeOutcomeMixByDataset } from "@/lib/analytics/datasetOutcomes";
+import { OUTCOME_LABELS, SEGMENT_COLORS } from "@/components/charts/palette";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { HorizontalBarChart } from "@/components/charts/HorizontalBarChart";
-import { Expander } from "@/components/ui/Expander";
+import { OutcomeMixBars } from "@/components/charts/OutcomeMixBars";
+import { InfoCallout } from "@/components/ui/InfoCallout";
 
 interface GnwUsageSectionProps {
   readonly rows: readonly TraceRow[];
+}
+
+/** Two-state coverage donut (has X vs not), colored as a polarity pair. */
+function coverageData(
+  rows: readonly TraceRow[],
+  flag: (row: TraceRow) => boolean | null,
+  yesLabel: string,
+  noLabel: string,
+) {
+  const known = rows.filter((r) => flag(r) !== null);
+  const yes = known.filter((r) => flag(r) === true).length;
+  return {
+    known: known.length,
+    data: [
+      { label: yesLabel, count: yes },
+      { label: noLabel, count: known.length - yes },
+    ],
+    colors: {
+      [yesLabel]: SEGMENT_COLORS.new,
+      [noLabel]: SEGMENT_COLORS.returning,
+    },
+  };
 }
 
 export function GnwUsageSection({ rows }: GnwUsageSectionProps) {
@@ -18,15 +43,41 @@ export function GnwUsageSection({ rows }: GnwUsageSectionProps) {
     () =>
       countCategories(
         rows.map((r) => r.datasetsAnalysed),
-        { explodeCsv: true, topN: 10 }
+        { explodeCsv: true, topN: 10 },
       ),
-    [rows]
+    [rows],
   );
   const aoiTypeCounts = useMemo(
-    () => countCategories(rows.map((r) => r.aoiType), { topN: 10 }),
-    [rows]
+    () =>
+      countCategories(
+        rows.map((r) => r.aoiType),
+        { topN: 10 },
+      ),
+    [rows],
   );
   const aoiNames = useMemo(() => countAoiNames(rows, 30), [rows]);
+  const datasetOutcomes = useMemo(
+    () =>
+      computeOutcomeMixByDataset(rows, 10).map((d) => ({
+        label: d.label,
+        total: d.total,
+        counts: Object.fromEntries(
+          Object.entries(d.counts).map(([outcome, count]) => [
+            OUTCOME_LABELS[outcome] ?? outcome,
+            count,
+          ]),
+        ),
+      })),
+    [rows],
+  );
+  const insight = useMemo(
+    () => coverageData(rows, (r) => r.hasInsight, "Insight", "No insight"),
+    [rows],
+  );
+  const globalScope = useMemo(
+    () => coverageData(rows, (r) => r.isGlobal, "Global", "Specific area"),
+    [rows],
+  );
 
   return (
     <Box>
@@ -34,35 +85,97 @@ export function GnwUsageSection({ rows }: GnwUsageSectionProps) {
         GNW Analysis Usage
       </Heading>
       <Flex direction="column" gap={3}>
-        <Expander title="ℹ️ Where does this data come from?">
-          <Text fontSize="sm">
-            These metrics are extracted from trace context metadata attached by the GNW
-            agent. Only traces that reach the analysis stage will have dataset and AOI
-            information populated.
-          </Text>
-        </Expander>
+        <InfoCallout title="Where does this data come from?">
+          These metrics are extracted from trace context metadata attached by
+          the GNW agent. Only traces that reach the analysis stage will have
+          dataset and AOI information populated — so totals here are lower than
+          overall trace counts by design.
+        </InfoCallout>
         <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4}>
           {datasetCounts.length ? (
             <ChartCard
               title="Datasets analysed"
-              help="Datasets referenced in successful analyses (from trace context)."
+              help="Datasets referenced in analyses (one trace can reference several)."
+              info="Counts come from trace context, so bars don't sum to the trace
+                total and shares of a whole aren't meaningful — compare bar lengths
+                instead. Use this to see which data products actually drive agent
+                usage, and which are never touched."
             >
-              <DonutChart data={datasetCounts} />
+              <HorizontalBarChart
+                data={datasetCounts.map((d) => ({
+                  label: d.label,
+                  count: d.count,
+                }))}
+              />
             </ChartCard>
           ) : null}
           {aoiTypeCounts.length ? (
             <ChartCard
               title="AOI type"
-              help="What kinds of areas users are analysing (e.g., country, admin region, drawn polygon)."
+              help="What kinds of areas users analyse (country, region, drawn polygon…)."
+              info="A high share of drawn polygons suggests users care about custom
+                places the catalog doesn't cover; a high share of countries suggests
+                broad exploratory use."
             >
-              <DonutChart data={aoiTypeCounts} />
+              <DonutChart data={aoiTypeCounts} centerLabel="analyses" />
             </ChartCard>
           ) : null}
         </SimpleGrid>
+        <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4}>
+          {insight.known ? (
+            <ChartCard
+              title="Insight coverage"
+              help="Share of traces that produced a saved insight."
+              info="Insights are the agent's packaged takeaway (chart + narrative).
+                A low share isn't automatically bad — clarifications and follow-ups
+                don't produce insights — but a falling trend after a release is a
+                regression signal."
+            >
+              <DonutChart
+                data={insight.data}
+                colors={insight.colors}
+                height={200}
+                centerLabel="traces"
+              />
+            </ChartCard>
+          ) : null}
+          {globalScope.known ? (
+            <ChartCard
+              title="Global vs specific area"
+              help="Whether analyses ran globally or on a selected area."
+              info="Global queries (“all countries”) are heavier and often
+                exploratory; specific areas signal a user with a concrete place in
+                mind. A rising global share can also flag misfired AOI selection."
+            >
+              <DonutChart
+                data={globalScope.data}
+                colors={globalScope.colors}
+                height={200}
+                centerLabel="traces"
+              />
+            </ChartCard>
+          ) : null}
+        </SimpleGrid>
+        {datasetOutcomes.length ? (
+          <ChartCard
+            title="Outcome mix by dataset"
+            help="How turns that touched each dataset ended, best → worst."
+            info="Rows are the most-used datasets; segments read left to right from
+              Success to Empty. A dataset whose warm share is well above its peers
+              usually has a broken handler or confusing schema — open its failing
+              traces in the Trace Explorer. Small totals swing wildly; check the
+              trace count in the tooltip before reacting."
+          >
+            <OutcomeMixBars data={datasetOutcomes} />
+          </ChartCard>
+        ) : null}
         {aoiNames.length ? (
           <ChartCard
             title="AOI selection counts"
-            help="Most commonly analysed places (AOIs) in this dataset, colored by dominant AOI type."
+            help="Most commonly analysed places, colored by dominant AOI type."
+            info="Bars share one count axis; color only says what kind of area the
+              place is. Repeated appearances of one place often trace back to a
+              single user's project — click through Top Users to confirm."
           >
             <HorizontalBarChart
               data={aoiNames.map((a) => ({

@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Box, Button, Flex, Heading, Table, Text } from "@chakra-ui/react";
-import { CopyIcon, DownloadSimpleIcon } from "@phosphor-icons/react";
+import {
+  ClipboardTextIcon,
+  CopyIcon,
+  DownloadSimpleIcon,
+  TableIcon,
+} from "@phosphor-icons/react";
 import type { TraceRow } from "@/lib/types";
 import type { ReportContext } from "@/lib/analytics/report";
 import { buildSlackSummary, buildSummaryTable } from "@/lib/analytics/report";
@@ -56,7 +61,10 @@ export function SummarySection({
       </Heading>
 
       <Flex direction="column" gap={3}>
-        <Expander title="📋 Copy summary for Slack">
+        <Expander
+          title="Copy summary for Slack"
+          icon={<ClipboardTextIcon size={16} />}
+        >
           <Button size="xs" variant="outline" mb={2} onClick={copySummary}>
             <CopyIcon />
             {copied ? "Copied!" : "Copy to clipboard"}
@@ -74,7 +82,10 @@ export function SummarySection({
           </Box>
         </Expander>
 
-        <Expander title="📑 Full metric table (with definitions)">
+        <Expander
+          title="Full metric table (with definitions)"
+          icon={<TableIcon size={16} />}
+        >
           <Box overflowX="auto">
             <Table.Root size="sm" striped>
               <Table.Header>

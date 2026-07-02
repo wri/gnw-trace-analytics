@@ -20,6 +20,7 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { DailyLinesChart } from "@/components/charts/DailyLinesChart";
 import { DailyOutcomeAreaChart } from "@/components/charts/DailyOutcomeAreaChart";
 import { SummarySection } from "@/components/analytics/SummarySection";
+import { CATEGORY_COLORS, CHART_CHROME } from "@/components/charts/palette";
 
 interface OverviewTabProps {
   readonly rows: readonly TraceRow[];
@@ -54,6 +55,8 @@ export function OverviewTab({
     [daily]
   );
   const showMa = daily.length >= 10;
+  const spark = (key: keyof DailyMetrics) =>
+    daily.length >= 2 ? daily.map((d) => Number(d[key])) : undefined;
 
   const kpis = [
     {
@@ -62,6 +65,7 @@ export function OverviewTab({
       delta: prevStats
         ? relativeDelta(stats.totalTraces, prevStats.totalTraces, { upIsGood: true })
         : null,
+      spark: spark("traces"),
     },
     {
       label: "Active users",
@@ -69,6 +73,7 @@ export function OverviewTab({
       delta: prevStats
         ? relativeDelta(stats.uniqueUsers, prevStats.uniqueUsers, { upIsGood: true })
         : null,
+      spark: spark("uniqueUsers"),
     },
     {
       label: "Conversations",
@@ -76,6 +81,7 @@ export function OverviewTab({
       delta: prevStats
         ? relativeDelta(stats.uniqueThreads, prevStats.uniqueThreads, { upIsGood: true })
         : null,
+      spark: spark("uniqueThreads"),
     },
     {
       label: "Success rate",
@@ -83,6 +89,7 @@ export function OverviewTab({
       delta: prevStats
         ? percentagePointDelta(stats.successRate, prevStats.successRate, { upIsGood: true })
         : null,
+      spark: spark("successRate"),
     },
     ...(segments
       ? [
@@ -121,6 +128,7 @@ export function OverviewTab({
       delta: prevStats
         ? relativeDelta(stats.p95Latency, prevStats.p95Latency, { upIsGood: false })
         : null,
+      spark: spark("p95Latency"),
     },
     {
       label: "LLM cost",
@@ -140,7 +148,8 @@ export function OverviewTab({
       </SimpleGrid>
       {prevStats ? (
         <Text fontSize="xs" color="fg.muted" mt={-2}>
-          Deltas compare against the previous period ({prevRangeLabel}).
+          Deltas compare against the previous period ({prevRangeLabel}); sparklines
+          show the daily trend inside the current window.
         </Text>
       ) : null}
 
@@ -148,16 +157,33 @@ export function OverviewTab({
         {daily.length ? (
           <ChartCard
             title="Daily volume"
-            help={`Daily traces, unique users, and unique threads${showMa ? " · dashed = 7-day average of traces" : ""}.`}
+            help="Traces, unique users and unique threads per day."
+            info={
+              <>
+                Each line counts distinct items per calendar day: prompts sent
+                (traces), users who sent at least one, and conversation threads
+                touched.{showMa ? " The dashed gray line is a 7-day moving average of traces — follow it, not the daily spikes, for the underlying trend." : ""}{" "}
+                Weekday/weekend rhythm is normal; look for the lines moving
+                together (organic growth) vs. traces spiking alone (a few heavy
+                users or a bot).
+              </>
+            }
           >
             <DailyLinesChart
               data={volumeData}
               series={[
-                { key: "traces", label: "Traces", color: "#0068C9" },
-                { key: "uniqueUsers", label: "Unique users", color: "#12b76a" },
-                { key: "uniqueThreads", label: "Unique threads", color: "#f58518" },
+                { key: "traces", label: "Traces", color: CATEGORY_COLORS[0] },
+                { key: "uniqueUsers", label: "Unique users", color: CATEGORY_COLORS[2] },
+                { key: "uniqueThreads", label: "Unique threads", color: CATEGORY_COLORS[1] },
                 ...(showMa
-                  ? [{ key: "tracesMa", label: "Traces (7d avg)", color: "#98a2b3" }]
+                  ? [
+                      {
+                        key: "tracesMa",
+                        label: "Traces (7d avg)",
+                        color: CHART_CHROME.contextSeries,
+                        dashed: true,
+                      },
+                    ]
                   : []),
               ]}
               yLabel="Count"
@@ -165,7 +191,20 @@ export function OverviewTab({
           </ChartCard>
         ) : null}
         {daily.length ? (
-          <ChartCard title="Daily outcomes" help="Daily mix of outcomes as stacked rates.">
+          <ChartCard
+            title="Daily outcomes"
+            help="Share of each day's traces by outcome."
+            info={
+              <>
+                Every trace gets exactly one outcome, so each day stacks to 100%.
+                Green (Success) should dominate; the warm bands at the bottom are
+                failures — amber = apologetic answer, red = user-visible error,
+                dark red = no answer at all. Gray (Defer) is a clarification
+                request, not a failure. A widening warm band on a specific day
+                usually points at an incident — drill into it from the Quality tab.
+              </>
+            }
+          >
             <DailyOutcomeAreaChart data={daily} />
           </ChartCard>
         ) : null}

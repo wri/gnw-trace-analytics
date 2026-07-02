@@ -22,23 +22,34 @@ export function ToolUsageSection({ rows }: ToolUsageSectionProps) {
         Tool usage
       </Heading>
       <Text fontSize="sm" color="fg.muted" mb={3}>
-        Per-turn tool metrics from the Zeno API. Deep agentic-flow analysis needs the
-        full conversation tree and lives in Langfuse-backed tooling; reasoning-token
-        charts are omitted (Gemini reports no reasoning tokens).
+        Per-turn tool metrics from the Zeno API. Deep agentic-flow analysis
+        needs the full conversation tree and lives in Langfuse-backed tooling;
+        reasoning-token charts are omitted (Gemini reports no reasoning tokens).
       </Text>
       <Flex direction="column" gap={4}>
         <StatCards
           items={[
-            { label: "Avg tool calls / trace", value: usage.avgToolCalls.toFixed(2) },
+            {
+              label: "Avg tool calls / trace",
+              value: usage.avgToolCalls.toFixed(2),
+            },
             { label: "Max tool calls", value: formatCount(usage.maxToolCalls) },
-            { label: "Tool error rate", value: formatPercent(usage.toolErrorRate) },
+            {
+              label: "Tool error rate",
+              value: formatPercent(usage.toolErrorRate),
+            },
           ]}
           columns={3}
         />
         {usage.scatter.length ? (
           <ChartCard
             title="Tool calls vs latency"
-            help="Per-trace tool-call count against latency, coloured by outcome."
+            help="Each dot is one trace: how many tools it called and how long it took."
+            info="Latency should rise roughly linearly with tool calls — that diagonal
+              band is normal. Watch for red dots at low tool counts (fast failures,
+              often refusals or crashes) and green dots far above the band (slow
+              successes worth optimising). Dots at zero tool calls are answers that
+              never touched a tool."
           >
             <ToolCallsScatterChart data={usage.scatter} />
           </ChartCard>

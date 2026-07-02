@@ -7,20 +7,20 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
+import { Box, Button, Flex, Spinner, Tabs, Text } from "@chakra-ui/react";
 import {
-  Box,
-  Button,
-  Flex,
-  Heading,
-  Spinner,
-  Tabs,
-  Text,
-} from "@chakra-ui/react";
-import { ArrowsClockwiseIcon } from "@phosphor-icons/react";
+  ArrowsClockwiseIcon,
+  ArticleIcon,
+  GaugeIcon,
+  SealCheckIcon,
+  TimerIcon,
+  UsersThreeIcon,
+} from "@phosphor-icons/react";
 import { AuthGate } from "@/components/AuthGate";
 import { AppShell } from "@/components/AppShell";
 import { FiltersBar } from "@/components/FiltersBar";
 import { InlineAlert } from "@/components/ui/InlineAlert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { OverviewTab } from "@/components/analytics/OverviewTab";
 import { UsersTab } from "@/components/analytics/UsersTab";
 import { OutcomesSection } from "@/components/analytics/OutcomesSection";
@@ -32,6 +32,7 @@ import { GnwUsageSection } from "@/components/analytics/GnwUsageSection";
 import { useFiltersStore } from "@/stores/filtersStore";
 import { useAnalyticsStore, useUsersStore } from "@/stores/dataStores";
 import { fetchTracesWindow } from "@/lib/api/zeno";
+import { withDetectedLanguage } from "@/lib/analytics/language";
 import { buildUserFirstSeenMap, fetchAllUsers } from "@/lib/api/users";
 import { keepUserId } from "@/lib/filters";
 import { baseThreadUrl, DEFAULT_MAX_TRACES } from "@/lib/config";
@@ -50,21 +51,22 @@ const AUTO_FETCH_DEBOUNCE_MS = 400;
 function useFilteredRows(
   rows: readonly TraceRow[] | null,
   excludeInternal: boolean,
-  environment: string
+  environment: string,
 ): readonly TraceRow[] {
   return useMemo(
     () =>
       (rows ?? []).filter(
         (row) =>
           keepUserId(row.userId, { excludeInternal }) &&
-          (environment === "all" || row.environment === environment)
+          (environment === "all" || row.environment === environment),
       ),
-    [rows, excludeInternal, environment]
+    [rows, excludeInternal, environment],
   );
 }
 
 function AnalyticsView() {
-  const { startDate, endDate, environment, excludeInternal } = useFiltersStore();
+  const { startDate, endDate, environment, excludeInternal } =
+    useFiltersStore();
   const analytics = useAnalyticsStore();
   const users = useUsersStore();
   const abortRef = useRef<AbortController | null>(null);
@@ -88,12 +90,12 @@ function AnalyticsView() {
             maxItems: DEFAULT_MAX_TRACES,
             signal: controller.signal,
             onProgress: (fetched) => analytics.setProgress(fetched),
-          }
+          },
         ),
         // Comparison window is best-effort — deltas simply hide on failure.
         fetchTracesWindow(
           { ...prev, environment: env },
-          { maxItems: DEFAULT_MAX_TRACES, signal: controller.signal }
+          { maxItems: DEFAULT_MAX_TRACES, signal: controller.signal },
         ).catch(() => null),
       ]);
       if (controller.signal.aborted) return;
@@ -107,8 +109,12 @@ function AnalyticsView() {
   // Auto-fetch when the filter signature changes (debounced for date typing).
   useEffect(() => {
     if (!validRange) return;
-    if (analytics.signature === signature && analytics.status !== "idle") return;
-    const timer = setTimeout(() => void runFetch(signature), AUTO_FETCH_DEBOUNCE_MS);
+    if (analytics.signature === signature && analytics.status !== "idle")
+      return;
+    const timer = setTimeout(
+      () => void runFetch(signature),
+      AUTO_FETCH_DEBOUNCE_MS,
+    );
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, validRange]);
@@ -118,17 +124,34 @@ function AnalyticsView() {
     if (users.status !== "idle") return;
     users.start();
     fetchAllUsers({ onProgress: (fetched) => users.setProgress(fetched) })
-      .then((allUsers) => users.succeed(allUsers, buildUserFirstSeenMap(allUsers)))
+      .then((allUsers) =>
+        users.succeed(allUsers, buildUserFirstSeenMap(allUsers)),
+      )
       .catch((error) =>
-        users.fail(error instanceof Error ? error.message : String(error))
+        users.fail(error instanceof Error ? error.message : String(error)),
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const rawCount = analytics.rows.length;
-  const rows = useFilteredRows(analytics.rows, excludeInternal, environment);
-  const prevRows = useFilteredRows(analytics.prevRows, excludeInternal, environment);
-  const hasPrev = analytics.prevRows !== null;
+  const filteredRows = useFilteredRows(
+    analytics.rows,
+    excludeInternal,
+    environment,
+  );
+  // Fill `language` locally (franc) wherever the API left it null.
+  const rows = useMemo(
+    () => withDetectedLanguage(filteredRows),
+    [filteredRows],
+  );
+  const prevRows = useFilteredRows(
+    analytics.prevRows,
+    excludeInternal,
+    environment,
+  );
+  // An empty comparison window (e.g. "All time") makes every delta ±100%
+  // noise — treat it the same as an unavailable window.
+  const hasPrev = analytics.prevRows !== null && prevRows.length > 0;
   const excludedCount = rawCount - rows.length;
 
   const range = analytics.fetchedRange ?? { startDate, endDate };
@@ -139,18 +162,23 @@ function AnalyticsView() {
   const utilisation = useMemo(() => computePromptUtilisation(rows), [rows]);
   const prevStats = useMemo(
     () => (hasPrev ? computeSummaryStats(prevRows) : null),
-    [hasPrev, prevRows]
+    [hasPrev, prevRows],
   );
   const prevUtilisation = useMemo(
     () => (hasPrev ? computePromptUtilisation(prevRows) : null),
-    [hasPrev, prevRows]
+    [hasPrev, prevRows],
   );
   const segments = useMemo(
     () =>
       users.firstSeenByUser
-        ? classifyUserSegments(rows, users.firstSeenByUser, range.startDate, range.endDate)
+        ? classifyUserSegments(
+            rows,
+            users.firstSeenByUser,
+            range.startDate,
+            range.endDate,
+          )
         : null,
-    [rows, users.firstSeenByUser, range.startDate, range.endDate]
+    [rows, users.firstSeenByUser, range.startDate, range.endDate],
   );
   const prevSegments = useMemo(
     () =>
@@ -159,10 +187,16 @@ function AnalyticsView() {
             prevRows,
             users.firstSeenByUser,
             prevRange.startDate,
-            prevRange.endDate
+            prevRange.endDate,
           )
         : null,
-    [hasPrev, prevRows, users.firstSeenByUser, prevRange.startDate, prevRange.endDate]
+    [
+      hasPrev,
+      prevRows,
+      users.firstSeenByUser,
+      prevRange.startDate,
+      prevRange.endDate,
+    ],
   );
 
   const reportContext = useMemo(
@@ -174,7 +208,7 @@ function AnalyticsView() {
       segments,
       totalKnownUsers: users.firstSeenByUser?.size ?? 0,
     }),
-    [range, stats, utilisation, segments, users.firstSeenByUser]
+    [range, stats, utilisation, segments, users.firstSeenByUser],
   );
 
   const threadUrl = baseThreadUrl(environment);
@@ -182,17 +216,30 @@ function AnalyticsView() {
 
   return (
     <Flex direction="column" gap={5}>
-      <Box>
-        <Heading size="lg">📊 Trace Analytics</Heading>
-        <Text color="fg.muted" fontSize="sm" mt={1}>
-          User behaviour and app analytics from the Zeno API (server-side, per-turn
-          aggregation). Data refreshes automatically when you change the filters.
-        </Text>
-      </Box>
+      <PageHeader
+        eyebrow="Zeno API · per-turn aggregates"
+        title="Trace Analytics"
+        description="User behaviour and app analytics for the GNW agent. Data refreshes
+          automatically when you change the filters, and headline numbers compare
+          against the previous period of equal length."
+      />
 
-      <Box bg="bg.panel" borderWidth="1px" borderColor="border" borderRadius="lg" p={4}>
+      <Box
+        bg="bg.panel"
+        borderWidth="1px"
+        borderColor="border"
+        borderRadius="sm"
+        p={4}
+      >
         <FiltersBar />
-        <Flex gap={3} mt={3} align="center" wrap="wrap" fontSize="xs" color="fg.muted">
+        <Flex
+          gap={3}
+          mt={3}
+          align="center"
+          wrap="wrap"
+          fontSize="xs"
+          color="fg.muted"
+        >
           {isLoading ? (
             <Flex align="center" gap={2}>
               <Spinner size="xs" color="primary.solid" />
@@ -206,14 +253,18 @@ function AnalyticsView() {
           ) : analytics.fetchedAt ? (
             <>
               <Text>
-                Data as of {new Date(analytics.fetchedAt).toLocaleTimeString()} ·{" "}
-                {formatCount(rows.length)} traces
+                Data as of {new Date(analytics.fetchedAt).toLocaleTimeString()}{" "}
+                · {formatCount(rows.length)} traces
                 {excludedCount > 0
                   ? ` (${formatCount(excludedCount)} internal/machine excluded)`
                   : ""}
                 {hasPrev ? "" : " · comparison window unavailable"}
               </Text>
-              <Button size="xs" variant="ghost" onClick={() => void runFetch(signature)}>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => void runFetch(signature)}
+              >
                 <ArrowsClockwiseIcon />
                 Refresh
               </Button>
@@ -223,10 +274,17 @@ function AnalyticsView() {
       </Box>
 
       {!validRange ? (
-        <InlineAlert status="warning" message="Start date must be on or before end date." />
+        <InlineAlert
+          status="warning"
+          message="Start date must be on or before end date."
+        />
       ) : null}
       {analytics.status === "error" && analytics.error ? (
-        <InlineAlert status="error" title="Trace fetch failed" message={analytics.error} />
+        <InlineAlert
+          status="error"
+          title="Trace fetch failed"
+          message={analytics.error}
+        />
       ) : null}
       {users.status === "error" && users.error ? (
         <InlineAlert
@@ -237,17 +295,42 @@ function AnalyticsView() {
       ) : null}
 
       {analytics.status === "loaded" && rows.length === 0 ? (
-        <InlineAlert status="warning" message="No traces matched the selected window/filters." />
+        <InlineAlert
+          status="warning"
+          message="No traces matched the selected window/filters."
+        />
+      ) : null}
+      {rawCount >= DEFAULT_MAX_TRACES ? (
+        <InlineAlert
+          status="warning"
+          title="Window truncated"
+          message={`Only the first ${formatCount(DEFAULT_MAX_TRACES)} traces were fetched — numbers below understate the full window. Narrow the date range for complete data.`}
+        />
       ) : null}
 
       {rows.length > 0 ? (
         <Tabs.Root defaultValue="overview" lazyMount>
           <Tabs.List>
-            <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
-            <Tabs.Trigger value="users">Users</Tabs.Trigger>
-            <Tabs.Trigger value="quality">Quality</Tabs.Trigger>
-            <Tabs.Trigger value="performance">Performance</Tabs.Trigger>
-            <Tabs.Trigger value="content">Content</Tabs.Trigger>
+            <Tabs.Trigger value="overview">
+              <GaugeIcon size={16} />
+              Overview
+            </Tabs.Trigger>
+            <Tabs.Trigger value="users">
+              <UsersThreeIcon size={16} />
+              Users
+            </Tabs.Trigger>
+            <Tabs.Trigger value="quality">
+              <SealCheckIcon size={16} />
+              Quality
+            </Tabs.Trigger>
+            <Tabs.Trigger value="performance">
+              <TimerIcon size={16} />
+              Performance
+            </Tabs.Trigger>
+            <Tabs.Trigger value="content">
+              <ArticleIcon size={16} />
+              Content
+            </Tabs.Trigger>
           </Tabs.List>
 
           <Tabs.Content value="overview">
@@ -278,7 +361,11 @@ function AnalyticsView() {
 
           <Tabs.Content value="quality">
             <Flex direction="column" gap={6}>
-              <OutcomesSection rows={rows} daily={daily} />
+              <OutcomesSection
+                rows={rows}
+                prevRows={hasPrev ? prevRows : null}
+                daily={daily}
+              />
               <ToolUsageSection rows={rows} />
             </Flex>
           </Tabs.Content>
