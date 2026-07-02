@@ -13,6 +13,7 @@ export const DATE_PRESETS = [
   "Last week",
   "Last 2 weeks",
   "Last month",
+  "Last 6 weeks",
   "All time",
 ] as const;
 
@@ -26,6 +27,7 @@ const PRESET_DAYS: Readonly<
   "Last week": 7,
   "Last 2 weeks": 14,
   "Last month": 30,
+  "Last 6 weeks": 42,
 };
 
 export function presetRange(preset: Exclude<DatePreset, "Custom">): {
