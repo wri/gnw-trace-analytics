@@ -26,6 +26,7 @@ import {
 } from "@phosphor-icons/react";
 import { useAuthStore } from "@/stores/authStore";
 import { clearToken, getLogoutUrl } from "@/lib/auth/token";
+import { InlineAlert } from "@/components/ui/InlineAlert";
 
 const NAV_ITEMS = [
   { href: "/analytics", label: "Analytics", icon: ChartBarIcon },
@@ -44,7 +45,12 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
   }
 
   return (
-    <Flex minH="100vh" bg="bg.subtle" borderTop="4px solid" borderTopColor="lime.400">
+    <Flex
+      minH="100vh"
+      bg="bg.subtle"
+      borderTop="4px solid"
+      borderTopColor="lime.400"
+    >
       <Flex
         as="nav"
         direction="column"
@@ -149,6 +155,13 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
       </Flex>
 
       <Box flex="1" minW={0} p={{ base: 4, lg: 6 }} maxW="1560px">
+        <Box mb={4}>
+          <InlineAlert
+            status="warning"
+            title="Trace API under active development"
+            message="Underlying data and outcome classification are still changing. Treat analytics as directional, not final, until this notice is removed."
+          />
+        </Box>
         {children}
       </Box>
     </Flex>
